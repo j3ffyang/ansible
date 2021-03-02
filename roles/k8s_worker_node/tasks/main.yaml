@@ -1,0 +1,32 @@
+---
+- name: Make the Swap inactive
+  command: swapoff -a
+
+- name: Remove Swap entry from /etc/fstab.
+  lineinfile:
+    dest: /etc/fstab
+    regexp: swap
+    state: absent
+
+- name: Install aptitude using apt
+  apt: name=aptitude state=latest update_cache=yes force_apt_get=yes
+
+- name: Install required system packages
+  apt: name={{ item }} state=latest update_cache=yes
+  loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'virtualenv', 'python3-setuptools']
+
+- name: Add Aliyun GPG apt Key
+  apt_key:
+    url: https://mirrors.aliyun.com/kubernetes/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add K8s Repository
+  apt_repository:
+    repo: deb https://mirrors.aliyun.com/kubernetes/apt/ kubernetes-xenial main
+    state: present
+
+- name: Update apt and install kubelet
+  apt: update_cache=yes name=kubelet=1.15.11-00 state=present
+
+- name: Update apt and install kubeadm
+  apt: update_cache=yes name=kubeadm=1.15.11-00 state=present

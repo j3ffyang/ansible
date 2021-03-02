@@ -1,0 +1,4 @@
+- name: pull an image
+  docker_image:
+    name: kube-apiserver:v1.15.12
+    source: pull

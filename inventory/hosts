@@ -1,0 +1,7 @@
+[vantiq]
+vantiq1 hostname=vantiq1
+vantiq2 hostname=vantiq2
+vantiq3 hostname=vantiq3
+
+[controller]
+nxyw205

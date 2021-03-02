@@ -1,0 +1,8 @@
+- hosts: vantiq
+  tasks:
+    - name: add set -o vi to the end of /etc/bash.bashrc
+      become: yes
+      become_user: root
+      lineinfile:
+        path: /etc/bash.bashrc
+        line: set -o vi

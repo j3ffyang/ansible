@@ -1,0 +1,7 @@
+- hosts: all
+  gather_facts: False
+  become: True
+  roles:
+  # - { role: k8s_worker_node, when: "inventory_hostname in groups['vantiq']" }
+  # - { role: os, when: "inventory_hostname in groups['vantiq']" }
+  - { role: pull_img_k8s, when: "inventory_hostname in groups['vantiq']" }
