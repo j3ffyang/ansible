@@ -20,6 +20,7 @@
 - [Appendix](#appendix)
     - [Full HA of Nginx](#full-ha-of-nginx)
     - [Comparison between `terraform` and `ansible`](#comparison-between-terraform-and-ansible)
+    - [Sample code](#sample-code)
 
 <!-- /code_chunk_output -->
 
@@ -146,20 +147,7 @@ PasswordAuthentication no
 
 #### Ansible
 
-- Setup accounts and access
-
-Follow the instruction to setup a `master0` and two `worker0` and `worker1` in the environment. And copy sshKey from `master0` into two workers by `ssh-copy-id`, so you can access worker by `root`
-
-```sh
-ubuntu@master0:~$ ssh root@worker1
-Welcome to Ubuntu 18.04.5 LTS (GNU/Linux 5.4.0-1041-azure x86_64)
-...
-*** System restart required ***
-Last login: Thu Mar 25 11:02:14 2021 from 10.39.64.10
-root@worker1:~#
-```
-
-- Install `ansible`, `python3`, and `pip3`
+- Pre-requisite: `ansible`, `python3`, and `pip3`
 
 ```sh
 sudo apt-add-repository ppa:ansible/ansible
@@ -172,6 +160,19 @@ sudo apt install -y python3-pip
 ```sh
 ubuntu@master0:~/ansible$ python3 -V
 Python 3.6.9
+```
+
+- Setup accounts and access
+
+Follow the instruction to setup a `master0` and two `worker0` and `worker1` in the environment. And copy sshKey from `master0` into two workers by `ssh-copy-id`, so you can access worker by `root`
+
+```sh
+ubuntu@master0:~$ ssh root@worker1
+Welcome to Ubuntu 18.04.5 LTS (GNU/Linux 5.4.0-1041-azure x86_64)
+...
+*** System restart required ***
+Last login: Thu Mar 25 11:02:14 2021 from 10.39.64.10
+root@worker1:~#
 ```
 
 - Directory structure
@@ -220,51 +221,101 @@ master0 | SUCCESS => {
 }
 ```
 
+> Reference > https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-ansible-on-ubuntu-18-04
+
+- Initialize `roles`
+
+With one `task` created
+
 ```sh
-ubuntu@master0:~/ansible$ ansible all -a "df -h" -u root
-master0 | CHANGED | rc=0 >>
-Filesystem      Size  Used Avail Use% Mounted on
-udev            2.0G     0  2.0G   0% /dev
-tmpfs           394M  712K  393M   1% /run
-/dev/sdb1       124G  2.2G  122G   2% /
-tmpfs           2.0G  124K  2.0G   1% /dev/shm
-tmpfs           5.0M     0  5.0M   0% /run/lock
-tmpfs           2.0G     0  2.0G   0% /sys/fs/cgroup
-/dev/sdb15      105M  6.1M   99M   6% /boot/efi
-/dev/sda1        16G   45M   15G   1% /mnt
-tmpfs           394M     0  394M   0% /run/user/1000
-tmpfs           394M     0  394M   0% /run/user/0
-worker0 | CHANGED | rc=0 >>
-Filesystem      Size  Used Avail Use% Mounted on
-udev            3.9G     0  3.9G   0% /dev
-tmpfs           797M  684K  796M   1% /run
-/dev/sda1       124G  1.7G  123G   2% /
-tmpfs           3.9G     0  3.9G   0% /dev/shm
-tmpfs           5.0M     0  5.0M   0% /run/lock
-tmpfs           3.9G     0  3.9G   0% /sys/fs/cgroup
-/dev/sda15      105M  6.1M   99M   6% /boot/efi
-tmpfs           797M     0  797M   0% /run/user/0
-worker1 | CHANGED | rc=0 >>
-Filesystem      Size  Used Avail Use% Mounted on
-udev            3.9G     0  3.9G   0% /dev
-tmpfs           797M  684K  796M   1% /run
-/dev/sda1       124G  1.7G  123G   2% /
-tmpfs           3.9G     0  3.9G   0% /dev/shm
-tmpfs           5.0M     0  5.0M   0% /run/lock
-tmpfs           3.9G     0  3.9G   0% /sys/fs/cgroup
-/dev/sda15      105M  6.1M   99M   6% /boot/efi
-tmpfs           797M     0  797M   0% /run/user/0
+mkdir -p ~/ansible/roles
+cd ~/ansible/roles
+
+ansible-galaxy init os_rm_pkg
+- Role roles was created successfully
+
+tree ~/ansible/roles
+roles
+└── os_rm_pkg_snapd
+    ├── README.md
+    ├── defaults
+    │   └── main.yml
+    ├── files
+    ├── handlers
+    │   └── main.yml
+    ├── meta
+    │   └── main.yml
+    ├── tasks
+    │   └── main.yml
+    ├── templates
+    ├── tests
+    │   ├── inventory
+    │   └── test.yml
+    └── vars
+        └── main.yml
+
+9 directories, 8 files
 ```
 
-> Reference > https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-ansible-on-ubuntu-18-04
+> Reference > https://www.decodingdevops.com/ansible-apt-module-examples/
 
 
 #### Operating System
-- Create `nonroot` user and add into `sudoer`
-- Modify `/etc/hosts`
-- Setup `sshd` and `ssh-copy-id` to all worker-node
-- Kernel tuning: `inode`, `ulimit`, etc
 
+- Delete unused packages
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/os_rm_pkg_snapd/tasks/main.yml
+---
+# tasks file for os_rm_pkg
+- name: Remove "snapd" packages
+  apt:
+    name: snapd
+    state: absent
+    autoremove: yes
+
+- name: Remove "ufw" packages
+  apt:
+    name: ufw
+    state: absent
+    autoremove: yes
+```
+
+- Modify `/etc/hosts`
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/os_mod_hosts/tasks/main.yml
+---
+# tasks file for os_mod_hosts
+- name: Insert multiple lines and Backup
+  blockinfile:
+    path: /etc/hosts
+    backup: yes
+    block: |
+      10.39.64.10	master0
+      10.39.64.20	worker0
+      10.39.64.21	worker1
+
+ubuntu@master0:~/ansible$ cat main.yaml
+- hosts: all
+  become: true
+
+  roles:
+        # - os_rm_pkg_snapd
+        - { role: os_mod_hosts, when: "inventory_hostname in groups['worker']" }
+```
+
+```sh
+ansible-playbook main.yaml
+```
+
+> Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
+
+- Setup `sshd` and `ssh-copy-id` to all worker-node
+
+
+- Create `nonroot` user and add into `sudoer`
+- Kernel tuning: `inode`, `ulimit`, etc
 
 #### Upfront Nginx Web Server on VM
 - HA. Refer to Full HA of Nginx in Appendix
@@ -349,10 +400,6 @@ Whenever picking one is not intentional to replace another. Both Ansible and Ter
 
 > And my personal preference is to **use Terraform for orchestration/ provisioning and Ansible for configuration management**.
 
-![](assets/markdown-img-paste-20210323120552780.png)
-
-![](assets/markdown-img-paste-20210323120531370.png)
-
 **There is still some overlapped functions**
 
 > When it comes to orchestration you can use the orchestration tools to not only provision servers, but also databases, caches, load balancers, queues, monitoring, subnet configuration, firewall settings, routing rules, SSL certificates, and almost every other aspect of your infrastructure, mainly public cloud infrastructure.
@@ -369,39 +416,49 @@ Because
 > - Ansible allows you to write tasks where you focus on WHAT you want rather than HOW to achieve it. These tasks are then mapped to some underlying code (typically python however you could create modules in any language), which is a procedural code and is platform specific.
 > - Ansible uses YAML as the language to create the playbooks, its way to define infrastructure as a code. Inherently YAML is a declarative language. All the tools that use YAML are essentially creating a declarative interface for their users e.g. kubernetes, docker compose etc.
 
+
+
 > Ref > https://www.quora.com/Is-Ansible-procedural-or-declarative
 
 
-- Sample code to create a user
+#### Sample code
 
 ```sh
-provisioner "remote-exec" {
-    inline = [
-        "useradd nonroot && echo nonroot:password123 | /usr/sbin/chpasswd",
-        "chmod +w /etc/sudoers && echo \"nonroot ALL=(ALL)       NOPASSWD: ALL\" >> /etc/sudoers && chmod -w /etc/sudoers",
-    ]
-    connection {
-        user = "myadmin"
-        agent = false
-    }
-    on_failure = "continue"
-}
+ubuntu@master0:~/ansible$ ansible all -a "df -h" -u root
+master0 | CHANGED | rc=0 >>
+Filesystem      Size  Used Avail Use% Mounted on
+udev            2.0G     0  2.0G   0% /dev
+tmpfs           394M  712K  393M   1% /run
+/dev/sdb1       124G  2.2G  122G   2% /
+tmpfs           2.0G  124K  2.0G   1% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           2.0G     0  2.0G   0% /sys/fs/cgroup
+/dev/sdb15      105M  6.1M   99M   6% /boot/efi
+/dev/sda1        16G   45M   15G   1% /mnt
+tmpfs           394M     0  394M   0% /run/user/1000
+tmpfs           394M     0  394M   0% /run/user/0
+worker0 | CHANGED | rc=0 >>
+Filesystem      Size  Used Avail Use% Mounted on
+udev            3.9G     0  3.9G   0% /dev
+tmpfs           797M  684K  796M   1% /run
+/dev/sda1       124G  1.7G  123G   2% /
+tmpfs           3.9G     0  3.9G   0% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           3.9G     0  3.9G   0% /sys/fs/cgroup
+/dev/sda15      105M  6.1M   99M   6% /boot/efi
+tmpfs           797M     0  797M   0% /run/user/0
+worker1 | CHANGED | rc=0 >>
+Filesystem      Size  Used Avail Use% Mounted on
+udev            3.9G     0  3.9G   0% /dev
+tmpfs           797M  684K  796M   1% /run
+/dev/sda1       124G  1.7G  123G   2% /
+tmpfs           3.9G     0  3.9G   0% /dev/shm
+tmpfs           5.0M     0  5.0M   0% /run/lock
+tmpfs           3.9G     0  3.9G   0% /sys/fs/cgroup
+/dev/sda15      105M  6.1M   99M   6% /boot/efi
+tmpfs           797M     0  797M   0% /run/user/0
 ```
 
-```sh
----
- - name: Create a login user
-     user:
-      name: nonroot
-      password: 'password123'
-      groups: # Empty by default, here we give it some groups
-       - docker
-       - sudo
-      state: present
-      shell: /bin/bash       # Defaults to /bin/bash
-      system: no             # Defaults to no
-      createhome: yes        # Defaults to yes
-      home: /home/nonroot  # Defaults to /home/<username>
-```
+#### Q2Bong
 
->
+- How to set `/etc/hosts` values as variable
