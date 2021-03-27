@@ -21,6 +21,7 @@
     - [Full HA of Nginx](#full-ha-of-nginx)
     - [Comparison between `terraform` and `ansible`](#comparison-between-terraform-and-ansible)
     - [Sample code](#sample-code)
+    - [Q2Bong](#q2bong)
 
 <!-- /code_chunk_output -->
 
@@ -311,7 +312,9 @@ ansible-playbook main.yaml
 
 > Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
 
-- Setup `sshd` and `ssh-copy-id` to all worker-node
+- ~~Setup `sshd` and `ssh-copy-id` to all worker-node~~
+
+This action has been done before setting up Ansible as pre-requisite, unless otherwise you want to have another userId
 
 
 - Create `nonroot` user and add into `sudoer`
