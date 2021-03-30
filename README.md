@@ -282,15 +282,19 @@ ubuntu@master0:~/ansible/roles/os_pkg_rm$ tree
 
 ```sh
 ubuntu@master0:~/ansible$ cat main.yaml
+
 - hosts: all
   become: true
 
   roles:
     # - { role: os_hostname_display, when: "inventory_hostname in groups['all']" }
     # - { role: os_pkg_rm, when: "inventory_hostname in groups['worker']" }
-    - { role: os_hosts_mod, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_hosts_mod, when: "inventory_hostname in groups['worker']" }
     # - { role: os_hosts_cp, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_hostname_set, when: "inventory_hostname in groups['worker']" }
     # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
+    # - { role: docker_install, when: "inventory_hostname in groups['all']" }
+    - { role: os_usr_create, when: "inventory_hostname in groups['worker']" }
 ```
 
 - Standard playbook command
@@ -398,6 +402,9 @@ This task won't trigger the actions of
       ssh_key_file: .ssh/id_rsa
   ```
 
+  ```sh
+  ansible-playbook --extra-vars @global.yaml main.yaml
+  ```
 
 
 - ~~Setup `sshd` and `ssh-copy-id` to all worker-node~~
