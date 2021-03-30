@@ -11,7 +11,9 @@
     - [Ansible](#ansible)
     - [Operating System](#operating-system)
     - [Docker](#docker)
+    - [Private Docker Registry (optional)](#private-docker-registry-optional)
     - [Kubernetes](#kubernetes)
+    - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Upfront Nginx Web Server on VM](#upfront-nginx-web-server-on-vm)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
@@ -453,10 +455,16 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 
 > Reference > https://horrell.ca/2020/06/18/installing-docker-on-ubuntu-with-ansible/
 
+#### Private Docker Registry (optional)
+
+This step is to prevent too many images from being downloaded over internet
+
 #### Kubernetes
 
 - Grant appropriate access for nonroot user for both
 - Create persistentVolume
+
+#### Airgap Docker and Kubernetes Install
 
 #### Upfront Nginx Web Server on VM
 - HA. Refer to Full HA of Nginx in Appendix
