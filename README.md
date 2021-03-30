@@ -307,20 +307,22 @@ ansible-playbook -e global.yaml main.yaml
 
   ---
   # tasks file for os_pkg_rm
-  - name: Remove "snapd" packages
+  - name: Remove "snapd" package
     apt:
       name: snapd
       state: absent
-      autoremove: yes
 
-  - name: Remove "ufw" packages
+  - name: Remove "ufw" package
     apt:
       name: ufw
       state: absent
+
+  - name: Remove dependencies that are no longer required
+    apt:
       autoremove: yes
   ```
 
-This task also triggers the actions of
+This task won't trigger the actions of
 
   ```sh
   systemctl stop ufw
@@ -333,6 +335,7 @@ This task also triggers the actions of
 
   ```sh
   ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
+
   {% for item in groups["all"] %}
   {{hostvars[item]['ansible_all_ipv4_addresses'][0]}} {{hostvars[item]['inventory_hostname']}}
   {% endfor %}
@@ -343,20 +346,27 @@ This task also triggers the actions of
   ```sh
   ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/tasks/main.yml
   ---
-  # tasks file for inv_hostname
-  #- name: What is my inventory_hostname
-  #  debug: var={{inventory_hostname}}
-  #
-  #- name: What is my ansible_hostname
-  #  debug: var={{ansible_hostname}}
+  # tasks file for os_hosts_mod
 
-  - name: Modify hosts in nodes
+  - name: Copy hosts
     template:
       src: hosts.j2
       dest: /etc/hosts
   ```
 
 > Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
+
+- Set hostname to all nodes, according to `/etc/hosts` on `master`
+
+  ```sh
+  ubuntu@master0:~/ansible$ cat roles/os_hostname_set/tasks/main.yml
+  ---
+  # tasks file for os_hostname_set
+
+  - name: hostnamectl set-hostname
+    hostname:
+      name: "{{inventory_hostname}}"
+  ```
 
 - ~~Setup `sshd` and `ssh-copy-id` to all worker-node~~
 
