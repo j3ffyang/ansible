@@ -373,7 +373,30 @@ This task won't trigger the actions of
 
   This supposes to create a `nonroot` user, to manage Docker and Kubernetes, in case a specific user has been occupied already in customer's environment. For example, `ubuntu` user is not allowed to be used.
 
-  
+  ```sh
+  ubuntu@master0:~/ansible$ cat global.yaml
+
+  uusername: nonroot
+  vaulted_passwd: secret
+  ```
+
+
+  ```sh
+  ubuntu@master0:~/ansible$ cat roles/os_usr_create/tasks/main.yml
+  ---
+  # tasks file for os_usr_create
+
+  - name: Create a nonroot user
+    user:
+      name: "{{ uusername }}"
+      password: "{{ vaulted_passwd | password_hash('sha512') }}"
+      shell: /bin/bash
+      groups: docker
+      append: yes
+      generate_ssh_key: yes
+      ssh_key_bits: 2048
+      ssh_key_file: .ssh/id_rsa
+  ```
 
 
 
