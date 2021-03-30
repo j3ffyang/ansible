@@ -7,7 +7,6 @@
 - [Pre-requisite](#pre-requisite)
 - [Architecture Overview](#architecture-overview)
 - [Deployment Workflow](#deployment-workflow)
-  - [Jumpbox (DMZ)](#jumpbox-dmz)
     - [System hardening](#system-hardening)
     - [Ansible](#ansible)
     - [Operating System](#operating-system)
@@ -16,6 +15,7 @@
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Block Disks](#block-disks)
+    - [Reference](#reference)
     - [Beyond this point, VANTIQ deployment cat start](#beyond-this-point-vantiq-deployment-cat-start)
 - [Appendix](#appendix)
     - [Full HA of Nginx](#full-ha-of-nginx)
@@ -126,9 +126,9 @@ vantiqSystem -.- operationSvc
 
 ## Deployment Workflow
 
-### Jumpbox (DMZ)
-
 #### System hardening
+
+This is specifically setup for jumpbox
 
 - `/etc/ssh/sshd_config`
 ```sh
@@ -139,6 +139,24 @@ PasswordAuthentication no
 
 - `firewalld`
   - `masquerade`
+
+  ```sh
+  ubuntu@master0:~/ansible$ sudo firewall-cmd --list-all
+  public
+    target: default
+    icmp-block-inversion: no
+    interfaces:
+    sources:
+    services: ssh dhcpv6-client http https
+    ports: 12345/udp
+    protocols:
+    masquerade: yes
+    forward-ports:
+    source-ports:
+    icmp-blocks:
+    rich rules:
+  ```
+
 - Kernel tuning and enable `ip_forward` for `masquerade`
 
 
@@ -226,89 +244,117 @@ master0 | SUCCESS => {
 
 - Initialize `roles`
 
+`roles` naming pattern: `segment_target_exec`, eg. `os_host_mod`
+
 With one `task` created
 
 ```sh
 mkdir -p ~/ansible/roles
 cd ~/ansible/roles
 
-ansible-galaxy init os_rm_pkg
+ansible-galaxy init os_pkg_rm
 - Role roles was created successfully
 
-tree ~/ansible/roles
-roles
-└── os_rm_pkg_snapd
-    ├── README.md
-    ├── defaults
-    │   └── main.yml
-    ├── files
-    ├── handlers
-    │   └── main.yml
-    ├── meta
-    │   └── main.yml
-    ├── tasks
-    │   └── main.yml
-    ├── templates
-    ├── tests
-    │   ├── inventory
-    │   └── test.yml
-    └── vars
-        └── main.yml
-
-9 directories, 8 files
+ubuntu@master0:~/ansible/roles/os_pkg_rm$ tree
+.
+├── README.md
+├── defaults
+│   └── main.yml
+├── files
+├── handlers
+│   └── main.yml
+├── meta
+│   └── main.yml
+├── tasks
+│   └── main.yml
+├── templates
+├── tests
+│   ├── inventory
+│   └── test.yml
+└── vars
+    └── main.yml
 ```
 
 > Reference > https://www.decodingdevops.com/ansible-apt-module-examples/
 
-
-#### Operating System
-
-- Delete unused packages
+- `main.yaml` - main playbook pattern
 
 ```sh
-ubuntu@master0:~/ansible$ cat roles/os_rm_pkg_snapd/tasks/main.yml
----
-# tasks file for os_rm_pkg
-- name: Remove "snapd" packages
-  apt:
-    name: snapd
-    state: absent
-    autoremove: yes
-
-- name: Remove "ufw" packages
-  apt:
-    name: ufw
-    state: absent
-    autoremove: yes
-```
-
-- Modify `/etc/hosts`
-
-```sh
-ubuntu@master0:~/ansible$ cat roles/os_mod_hosts/tasks/main.yml
----
-# tasks file for os_mod_hosts
-- name: Insert multiple lines and Backup
-  blockinfile:
-    path: /etc/hosts
-    backup: yes
-    block: |
-      10.39.64.10	master0
-      10.39.64.20	worker0
-      10.39.64.21	worker1
-
 ubuntu@master0:~/ansible$ cat main.yaml
 - hosts: all
   become: true
 
   roles:
-        # - os_rm_pkg_snapd
-        - { role: os_mod_hosts, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_hostname_display, when: "inventory_hostname in groups['all']" }
+    # - { role: os_pkg_rm, when: "inventory_hostname in groups['worker']" }
+    - { role: os_hosts_mod, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_hosts_cp, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
 ```
 
+- Standard playbook command
+
 ```sh
-ansible-playbook main.yaml
+ansible-playbook -e global.yaml main.yaml
 ```
+
+#### Operating System
+
+- Delete unused packages - `role: os_pkg_rm`
+
+  ```sh
+  cat roles/os_pkg_rm/tasks/main.yml
+
+  ---
+  # tasks file for os_pkg_rm
+  - name: Remove "snapd" packages
+    apt:
+      name: snapd
+      state: absent
+      autoremove: yes
+
+  - name: Remove "ufw" packages
+    apt:
+      name: ufw
+      state: absent
+      autoremove: yes
+  ```
+
+This task also triggers the actions of
+
+  ```sh
+  systemctl stop ufw
+  systemctl disable ufw
+  ```
+
+- Set `/etc/hosts` - `role: os_hosts_mod`
+
+  - Templates
+
+  ```sh
+  ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
+  {% for item in groups["all"] %}
+  {{hostvars[item]['ansible_all_ipv4_addresses'][0]}} {{hostvars[item]['inventory_hostname']}}
+  {% endfor %}
+  ```
+
+  - Tasks
+
+  ```sh
+  ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/tasks/main.yml
+  ---
+  # tasks file for inv_hostname
+  #- name: What is my inventory_hostname
+  #  debug: var={{inventory_hostname}}
+  #
+  #- name: What is my ansible_hostname
+  #  debug: var={{ansible_hostname}}
+
+  - name: Modify hosts in nodes
+    template:
+      src: hosts.j2
+      dest: /etc/hosts
+  ```
 
 > Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
 
@@ -343,6 +389,24 @@ This action has been done before setting up Ansible as pre-requisite, unless oth
 #### Block Disks
 - Format disks into `xfs` for MongoDB and `ext4` filesystem format for other application
 - Mount disks to respective virtual_machines
+
+#### Reference
+
+- Copy a file
+
+  ```sh
+  cat roles/os_hosts_cp/tasks/main.yml
+  ---
+  # tasks file for os_mod_hosts
+  - name: Insert multiple lines and Backup
+    blockinfile:
+      path: /etc/hosts
+      backup: yes
+      block: |
+        10.39.64.10	master0
+        10.39.64.20	worker0
+        10.39.64.21	worker1
+  ```
 
 #### Beyond this point, VANTIQ deployment cat start
 ---
