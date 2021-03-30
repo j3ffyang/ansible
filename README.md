@@ -10,8 +10,9 @@
     - [System hardening](#system-hardening)
     - [Ansible](#ansible)
     - [Operating System](#operating-system)
+    - [Docker](#docker)
+    - [Kubernetes](#kubernetes)
     - [Upfront Nginx Web Server on VM](#upfront-nginx-web-server-on-vm)
-    - [Docker and Kubernetes](#docker-and-kubernetes)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Block Disks](#block-disks)
@@ -356,7 +357,7 @@ This task won't trigger the actions of
 
 > Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
 
-- Set hostname to all nodes, according to `/etc/hosts` on `master`
+- Set hostname to all nodes, according to `/etc/hosts` on `control node`
 
   ```sh
   ubuntu@master0:~/ansible$ cat roles/os_hostname_set/tasks/main.yml
@@ -368,6 +369,14 @@ This task won't trigger the actions of
       name: "{{inventory_hostname}}"
   ```
 
+- Create a `nonroot` user on all nodes, including `control` node
+
+  This supposes to create a `nonroot` user, to manage Docker and Kubernetes, in case a specific user has been occupied already in customer's environment. For example, `ubuntu` user is not allowed to be used.
+
+  
+
+
+
 - ~~Setup `sshd` and `ssh-copy-id` to all worker-node~~
 
 This action has been done before setting up Ansible as pre-requisite, unless otherwise you want to have another userId
@@ -376,15 +385,53 @@ This action has been done before setting up Ansible as pre-requisite, unless oth
 - Create `nonroot` user and add into `sudoer`
 - Kernel tuning: `inode`, `ulimit`, etc
 
+#### Docker
+- Install docker
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
+---
+# tasks file for docker_install
+
+- name: Install apt packages
+  apt:
+    update_cache: yes
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+    state: present
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker apt repository
+  apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release | lower }} stable
+    state: present
+
+- name: Install docker
+  apt:
+    update_cache: yes
+    name: docker-ce
+    state: present
+```
+
+> Reference > https://horrell.ca/2020/06/18/installing-docker-on-ubuntu-with-ansible/
+
+#### Kubernetes
+
+- Grant appropriate access for nonroot user for both
+- Create persistentVolume
+
 #### Upfront Nginx Web Server on VM
 - HA. Refer to Full HA of Nginx in Appendix
 - LB
 - Perf tuning, caching
-
-#### Docker and Kubernetes
-- Install docker and kubernetes
-- Grant appropriate access for nonroot user for both
-- Create persistentVolume
 
 #### Components on Kubernetes
 - Use `helm3`
