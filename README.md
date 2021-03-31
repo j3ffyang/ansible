@@ -8,11 +8,12 @@
 - [Architecture Overview](#architecture-overview)
 - [Deployment Workflow](#deployment-workflow)
     - [System hardening](#system-hardening)
-    - [Ansible](#ansible)
+    - [Ansible Env Setup](#ansible-env-setup)
     - [Operating System](#operating-system)
     - [Docker](#docker)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
-    - [Kubernetes](#kubernetes)
+    - [Kubernetes (specific version)](#kubernetes-specific-version)
+    - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Upfront Nginx Web Server on VM](#upfront-nginx-web-server-on-vm)
     - [Components on Kubernetes](#components-on-kubernetes)
@@ -165,9 +166,9 @@ PasswordAuthentication no
 
 - Port open (VM level. Still need configuration in security group from cloud service provider):
   - TCP: `80`, `443`, `22`
-  - UDP: `51823` for wireGuard
+  - UDP: `12345` for wireGuard
 
-#### Ansible
+#### Ansible Env Setup
 
 - Pre-requisite: `ansible`, `python3`, and `pip3`
 
@@ -459,10 +460,12 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 
 This step is to prevent too many images from being downloaded over internet
 
-#### Kubernetes
+#### Kubernetes (specific version)
 
 - Grant appropriate access for nonroot user for both
 - Create persistentVolume
+
+#### Kubernetes upgrade for an existing cluster
 
 #### Airgap Docker and Kubernetes Install
 
