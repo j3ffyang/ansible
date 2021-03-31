@@ -300,10 +300,10 @@ ubuntu@master0:~/ansible$ cat main.yaml
     - { role: os_usr_create, when: "inventory_hostname in groups['worker']" }
 ```
 
-- Standard playbook command
+- Standard playbook execution command
 
 ```sh
-ansible-playbook -e global.yaml main.yaml
+ansible-playbook --extra-vars @global.yaml main.yaml
 ```
 
 #### Operating System
@@ -342,12 +342,27 @@ This task won't trigger the actions of
   - Templates
 
   ```sh
+  ubuntu@master0:~/ansible$ cat inventory/hosts
+  [worker]
+  worker0	ansible_host=10.39.64.20
+  worker1 ansible_host=10.39.64.21
+
+  [controller]
+  master0 ansible_host=10.39.64.10
+
+  [all:vars]
+  ansible_python_interpreter=/usr/bin/python3
+  ```
+
+  ```sh
   ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
 
   {% for item in groups["all"] %}
-  {{hostvars[item]['ansible_all_ipv4_addresses'][0]}} {{hostvars[item]['inventory_hostname']}}
+  {{hostvars[item]['ansible_host']}} {{hostvars[item]['inventory_hostname']}}
   {% endfor %}
   ```
+
+  The variable of `ansible_host` requires `inventory/hosts` contains `ansible_host` values
 
   - Tasks
 
