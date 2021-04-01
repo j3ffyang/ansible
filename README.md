@@ -210,17 +210,24 @@ ubuntu@master0:~/ansible$ tree
     └── hosts
 
 1 directory, 2 files
+```
+- Important Configuration
+
+```sh
 ubuntu@master0:~/ansible$ cat ansible.cfg
 [defaults]
 
 inventory	= 	inventory/hosts
+```
+
+```sh
 ubuntu@master0:~/ansible$ cat inventory/hosts
 [worker]
-worker0
-worker1
+worker0	ansible_host=10.39.64.20
+worker1 ansible_host=10.39.64.21
 
 [controller]
-master0
+master0 ansible_host=10.39.64.10
 
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3
@@ -339,7 +346,9 @@ This task won't trigger the actions of
 
 - Set `/etc/hosts` - `role: os_hosts_mod`
 
-  - Templates
+  - `ansible_host`
+
+  This file manages all hosts and their IPs
 
   ```sh
   ubuntu@master0:~/ansible$ cat inventory/hosts
@@ -353,6 +362,8 @@ This task won't trigger the actions of
   [all:vars]
   ansible_python_interpreter=/usr/bin/python3
   ```
+
+  - Templates
 
   ```sh
   ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
