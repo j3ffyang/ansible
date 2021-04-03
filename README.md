@@ -7,25 +7,30 @@
 - [Pre-requisite](#pre-requisite)
 - [Architecture Overview](#architecture-overview)
 - [Deployment Workflow](#deployment-workflow)
-    - [System hardening](#system-hardening)
-    - [Ansible Env Setup](#ansible-env-setup)
-    - [Operating System](#operating-system)
-    - [Docker](#docker)
+  - [Prototype Environment](#prototype-environment)
+  - [System Hardening](#system-hardening)
+  - [Ansible Env Setup](#ansible-env-setup)
+  - [Operating System](#operating-system)
+    - [Delete unused packages - `role: os_pkg_rm`](#delete-unused-packages-role-os_pkg_rm)
+    - [Set `/etc/hosts` - `role: os_hosts_mod`](#set-etchosts-role-os_hosts_mod)
+    - [Set hostname to all nodes](#set-hostname-to-all-nodes)
+    - [Create a `nonroot` user on all nodes, including `control` node](#create-a-nonroot-user-on-all-nodes-including-control-node)
+  - [Docker](#docker)
+    - [Install docker](#install-docker)
+    - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
-    - [Kubernetes (specific version)](#kubernetes-specific-version)
-    - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
-    - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
-    - [Upfront Nginx Web Server on VM](#upfront-nginx-web-server-on-vm)
+  - [Kubernetes (specific version)](#kubernetes-specific-version)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
-    - [Block Disks](#block-disks)
+    - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
+    - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
+  - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
-    - [Beyond this point, VANTIQ deployment cat start](#beyond-this-point-vantiq-deployment-cat-start)
+    - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
 - [Appendix](#appendix)
     - [Full HA of Nginx](#full-ha-of-nginx)
     - [Comparison between `terraform` and `ansible`](#comparison-between-terraform-and-ansible)
     - [Sample code](#sample-code)
-    - [Q2Bong](#q2bong)
 
 <!-- /code_chunk_output -->
 
@@ -51,7 +56,12 @@ cloud freeWorld
 
 package jumpBox {
   package webServer {
-    collections ELB
+    collections nginx
+    collections lb
+    collections ha
+
+    nginx -[hidden]> lb
+    lb -[hidden]> ha
   }
 
   package vpn {
@@ -62,77 +72,37 @@ package jumpBox {
 }
 
 
-package vantiqSystem {
+package kubernetes {
+  package vantiqSystem {
 
-  note "everything \nrunning on k8s" as N1
+  component nginx_ingress
+  component VANTIQ
 
-  collections nginx_ingress
-  note bottom of nginx_ingress: ingress_controller \non each worker \nfrom k8s
-
-  package vantiq {
-    collections vantiqCluster
+  nginx_ingress -[hidden]> VANTIQ
   }
 
-  package mongo {
-    database mongoCluster
-
-    note "primary* 1\nsecondary* 2" as N2
-    mongoCluster .[hidden].> N2
+  package operation {
+    component prometheus
   }
-
-  mongoCluster -[hidden]> monitoring
-
-  package monitoring {
-    agent grafana
-    database influxdb
-    database mysql
-    grafana --> influxdb
-    grafana --> mysql
-
-    note bottom of influxdb: timeSeries\ndata
-    note bottom of mysql: grafana\nconfiguration
-  }
-
-
-  nginx_ingress --> vantiqCluster
-
-  vantiqCluster --> mongoCluster
-
-  vantiqCluster --> grafana
-
-
-  package identity {
-    collections keycloak
-    database postgresql
-    keycloak -- postgresql
-  }
-
-  note top of identity: optional in\ndeployment
-
-  vantiqCluster <-- keycloak
 }
-
-package operationSvc {
-
-  component mongoBackup
-  component kubernetesBackup
-}
-
-
-mongoBackup -[hidden]- kubernetesBackup
 
 freeWorld -- webServer
 webServer --> nginx_ingress
-
-vantiqSystem -.- operationSvc
-
 ```
 
 ## Deployment Workflow
 
-#### System hardening
+### Prototype Environment
 
-This is specifically setup for jumpbox
+name | ip | spec
+-- | -- | --
+master0 | 10.39.64.10 | 2c4g
+worker0 | 10.39.64.20 | 2c8g
+worker1 | 10.39.64.21 | 2c8g
+
+### System Hardening
+
+This is specifically setup for jumpbox. __Only__ jumpbox can be accessed from internet
 
 - `/etc/ssh/sshd_config`
 ```sh
@@ -168,7 +138,7 @@ PasswordAuthentication no
   - TCP: `80`, `443`, `22`
   - UDP: `12345` for wireGuard
 
-#### Ansible Env Setup
+### Ansible Env Setup
 
 - Pre-requisite: `ansible`, `python3`, and `pip3`
 
@@ -176,7 +146,6 @@ PasswordAuthentication no
 sudo apt-add-repository ppa:ansible/ansible
 sudo apt update
 sudo apt install ansible
-
 sudo apt install -y python3-pip
 ```
 
@@ -211,29 +180,41 @@ ubuntu@master0:~/ansible$ tree
 
 1 directory, 2 files
 ```
-- Important Configuration
+- Important Configurations
 
-```sh
-ubuntu@master0:~/ansible$ cat ansible.cfg
-[defaults]
+  - `ansible.cfg`
+  ```sh
+  ubuntu@master0:~/ansible$ cat ansible.cfg
+  [defaults]
 
-inventory	= 	inventory/hosts
-```
+  inventory	= 	inventory/hosts
+  ```
 
-```sh
-ubuntu@master0:~/ansible$ cat inventory/hosts
-[worker]
-worker0	ansible_host=10.39.64.20
-worker1 ansible_host=10.39.64.21
+  - `inventory/hosts` - all nodes and associated IPs are here under Ansible
 
-[controller]
-master0 ansible_host=10.39.64.10
+  ```sh
+  ubuntu@master0:~/ansible$ cat inventory/hosts
+  [worker]
+  worker0	ansible_host=10.39.64.20
+  worker1 ansible_host=10.39.64.21
 
-[all:vars]
-ansible_python_interpreter=/usr/bin/python3
-```
+  [controller]
+  master0 ansible_host=10.39.64.10
 
-- Test
+  [all:vars]
+  ansible_python_interpreter=/usr/bin/python3
+  ```
+
+  - `global.yaml` - global variable
+
+  ```sh
+  ubuntu@master0:~/ansible$ cat global.yaml
+
+  uusername: nonroot
+  vaulted_passwd: secret
+  ```
+
+- Test Connections
 
 ```sh
 ubuntu@master0:~/ansible$ ansible all -m ping -u root
@@ -255,9 +236,9 @@ master0 | SUCCESS => {
 
 - Initialize `roles`
 
-`roles` naming pattern: `segment_target_exec`, eg. `os_host_mod`
+`roles` naming pattern: `segment_target_exec`, eg. `os_host_mod`. All `roles` go to `~/ansible/roles`
 
-With one `task` created
+Create a `role` with `task`
 
 ```sh
 mkdir -p ~/ansible/roles
@@ -309,13 +290,17 @@ ubuntu@master0:~/ansible$ cat main.yaml
 
 - Standard playbook execution command
 
+__Make sure comment out `roles` in `main.yaml` for particular action you want to perform__. Comment out all to execute all actions in one click. The `role` value in `main.yaml` must be identical to the one created by `ansible-galaxy init`
+
 ```sh
 ansible-playbook --extra-vars @global.yaml main.yaml
 ```
 
-#### Operating System
+> Will explain `global.yaml` later in this document
 
-- Delete unused packages - `role: os_pkg_rm`
+### Operating System
+
+#### Delete unused packages - `role: os_pkg_rm`
 
   ```sh
   cat roles/os_pkg_rm/tasks/main.yml
@@ -344,53 +329,57 @@ This task won't trigger the actions of
   systemctl disable ufw
   ```
 
-- Set `/etc/hosts` - `role: os_hosts_mod`
+But it doesn't matter
 
-  - `ansible_host`
+#### Set `/etc/hosts` - `role: os_hosts_mod`
 
-  This file manages all hosts and their IPs
+- `ansible_host`
 
-  ```sh
-  ubuntu@master0:~/ansible$ cat inventory/hosts
-  [worker]
-  worker0	ansible_host=10.39.64.20
-  worker1 ansible_host=10.39.64.21
+This file manages all hosts and their IPs
 
-  [controller]
-  master0 ansible_host=10.39.64.10
+```sh
+ubuntu@master0:~/ansible$ cat inventory/hosts
+[worker]
+worker0	ansible_host=10.39.64.20
+worker1 ansible_host=10.39.64.21
 
-  [all:vars]
-  ansible_python_interpreter=/usr/bin/python3
-  ```
+[controller]
+master0 ansible_host=10.39.64.10
 
-  - Templates
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+```
 
-  ```sh
-  ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
+- `templates` in `jinja2` format
 
-  {% for item in groups["all"] %}
-  {{hostvars[item]['ansible_host']}} {{hostvars[item]['inventory_hostname']}}
-  {% endfor %}
-  ```
+```sh
+ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
 
-  The variable of `ansible_host` requires `inventory/hosts` contains `ansible_host` values
+{% for item in groups["all"] %}
+{{hostvars[item]['ansible_host']}} {{hostvars[item]['inventory_hostname']}}
+{% endfor %}
+```
 
-  - Tasks
+The variable of `ansible_host` requires `inventory/hosts` contains `ansible_host` values
 
-  ```sh
-  ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/tasks/main.yml
-  ---
-  # tasks file for os_hosts_mod
+- `tasks`
 
-  - name: Copy hosts
-    template:
-      src: hosts.j2
-      dest: /etc/hosts
-  ```
+```sh
+ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/tasks/main.yml
+---
+# tasks file for os_hosts_mod
+
+- name: Copy hosts
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+```
 
 > Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
 
-- Set hostname to all nodes, according to `/etc/hosts` on `control node`
+#### Set hostname to all nodes
+
+According to `/etc/hosts` on `control node`
 
   ```sh
   ubuntu@master0:~/ansible$ cat roles/os_hostname_set/tasks/main.yml
@@ -402,7 +391,7 @@ This task won't trigger the actions of
       name: "{{inventory_hostname}}"
   ```
 
-- Create a `nonroot` user on all nodes, including `control` node
+#### Create a `nonroot` user on all nodes, including `control` node
 
   This supposes to create a `nonroot` user, to manage Docker and Kubernetes, in case a specific user has been occupied already in customer's environment. For example, `ubuntu` user is not allowed to be used.
 
@@ -440,12 +429,10 @@ This task won't trigger the actions of
 
 This action has been done before setting up Ansible as pre-requisite, unless otherwise you want to have another userId
 
-
-- Create `nonroot` user and add into `sudoer`
 - Kernel tuning: `inode`, `ulimit`, etc
 
-#### Docker
-- Install docker
+### Docker
+#### Install docker
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
@@ -482,23 +469,16 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 
 > Reference > https://horrell.ca/2020/06/18/installing-docker-on-ubuntu-with-ansible/
 
+#### Point to `quay.io` for docker image, instead of `dockerhub.com`
+
 #### Private Docker Registry (optional)
 
 This step is to prevent too many images from being downloaded over internet
 
-#### Kubernetes (specific version)
+### Kubernetes (specific version)
 
 - Grant appropriate access for nonroot user for both
 - Create persistentVolume
-
-#### Kubernetes upgrade for an existing cluster
-
-#### Airgap Docker and Kubernetes Install
-
-#### Upfront Nginx Web Server on VM
-- HA. Refer to Full HA of Nginx in Appendix
-- LB
-- Perf tuning, caching
 
 #### Components on Kubernetes
 - Use `helm3`
@@ -510,9 +490,17 @@ This step is to prevent too many images from being downloaded over internet
 - Apply custom SSL
 - Apply VANTIQ license key
 
-#### Block Disks
-- Format disks into `xfs` for MongoDB and `ext4` filesystem format for other application
-- Mount disks to respective virtual_machines
+#### Kubernetes upgrade for an existing cluster
+
+#### Airgap Docker and Kubernetes Install
+
+### Upfront Nginx Web Server on VM(s)
+- HA. Refer to Full HA of Nginx in Appendix
+- LB
+  - Get all `worker_node` from Kubernetes
+  - Get `nodePort` from `service` in Kubernetes
+  - Put the above into `/etc/nginx/nginx.conf` in upfront Nginx webServer(s)
+- Perf tuning, caching
 
 #### Reference
 
@@ -532,7 +520,7 @@ This step is to prevent too many images from being downloaded over internet
         10.39.64.21	worker1
   ```
 
-#### Beyond this point, VANTIQ deployment cat start
+#### Beyond this point, VANTIQ deployment can start from now
 ---
 
 
@@ -649,7 +637,3 @@ tmpfs           3.9G     0  3.9G   0% /sys/fs/cgroup
 /dev/sda15      105M  6.1M   99M   6% /boot/efi
 tmpfs           797M     0  797M   0% /run/user/0
 ```
-
-#### Q2Bong
-
-- How to set `/etc/hosts` values as variable
