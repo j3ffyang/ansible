@@ -339,6 +339,7 @@ This file manages all hosts and their IPs
 
 ```sh
 ubuntu@master0:~/ansible$ cat inventory/hosts
+
 [worker]
 worker0	ansible_host=10.39.64.20
 worker1 ansible_host=10.39.64.21
