@@ -20,6 +20,9 @@
     - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
   - [Kubernetes (specific version)](#kubernetes-specific-version)
+    - [Disable `swap`](#disable-swap)
+    - [](#)
+    - [Init the cluster on `master` only](#init-the-cluster-on-master-only)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
@@ -464,11 +467,16 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 - name: Install docker
   apt:
     update_cache: yes
-    name: docker-ce
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
     state: present
 ```
 
-> Reference > https://horrell.ca/2020/06/18/installing-docker-on-ubuntu-with-ansible/
+> Reference >
+- https://horrell.ca/2020/06/18/installing-docker-on-ubuntu-with-ansible/
+- https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/ # updated 20210405 for `containerd`
 
 #### Point to `quay.io` for docker image, instead of `dockerhub.com`
 
@@ -477,6 +485,71 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 This step is to prevent too many images from being downloaded over internet
 
 ### Kubernetes (specific version)
+
+#### Disable `swap`
+
+
+
+```sh
+- name: Remove swapfile from /etc/fstab
+  mount:
+    name: "{{ item }}"
+    fstype: swap
+    state: absent
+  with_items:
+    - swap
+    - none
+
+- name: Disable swap
+  command: swapoff -a
+  when: ansible_swaptotal_mb > 0
+```
+
+> Reference > https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/
+
+####
+
+```sh
+- name: Add an apt signing key for Kubernetes
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Adding apt repository for Kubernetes
+  apt_repository:
+    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+    filename: kubernetes.list
+
+- name: Install Kubernetes binaries
+  apt:
+    name: "{{ packages }}"
+    state: present
+    update_cache: yes
+  vars:
+    packages:
+      - kubelet
+      - kubeadm
+      - kubectl
+
+- name: Configure node ip
+  lineinfile:
+    path: /etc/default/kubelet
+    line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+
+- name: Restart kubelet
+  service:
+    name: kubelet
+    daemon_reload: yes
+    state: restarted
+```
+
+#### Init the cluster on `master` only
+
+```sh
+- name: Initialize the Kubernetes cluster using kubeadm
+  command: kubeadm init --apiserver-advertise-address="192.168.50.10" --apiserver-cert-extra-sans="192.168.50.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
+```
 
 - Grant appropriate access for nonroot user for both
 - Create persistentVolume
