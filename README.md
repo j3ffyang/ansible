@@ -5,9 +5,9 @@
 
 - [Objective](#objective)
 - [Pre-requisite](#pre-requisite)
-- [Architecture Overview](#architecture-overview)
+- [Architecture Overview **](#architecture-overview)
 - [Deployment Workflow](#deployment-workflow)
-  - [Prototype Environment](#prototype-environment)
+  - [Prototype Environment **](#prototype-environment)
   - [System Hardening](#system-hardening)
   - [Ansible Env Setup](#ansible-env-setup)
   - [Operating System](#operating-system)
@@ -16,7 +16,7 @@
     - [Set hostname to all nodes](#set-hostname-to-all-nodes)
     - [Create a `nonroot` user on all nodes, including `control` node](#create-a-nonroot-user-on-all-nodes-including-control-node)
   - [Docker](#docker)
-    - [Install docker](#install-docker)
+    - [Install docker ** (containerd.io)](#install-docker-containerdio)
     - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
   - [Kubernetes (specific version)](#kubernetes-specific-version)
@@ -51,7 +51,7 @@
 - Need several block-disks for MongoDB and others
 - A DNS that can resolve service.domain.com, or a local `/etc/hosts` must be modified as well as `nging-ingress` accordingly
 
-## Architecture Overview
+## Architecture Overview **
 
 ```plantuml
 
@@ -95,7 +95,7 @@ webServer --> nginx_ingress
 
 ## Deployment Workflow
 
-### Prototype Environment
+### Prototype Environment **
 
 name | ip | spec
 -- | -- | --
@@ -183,7 +183,7 @@ ubuntu@master0:~/ansible$ tree
 
 1 directory, 2 files
 ```
-- Important Configurations
+- Important Configurations **
 
   - `ansible.cfg`
   ```sh
@@ -193,7 +193,7 @@ ubuntu@master0:~/ansible$ tree
   inventory	= 	inventory/hosts
   ```
 
-  - `inventory/hosts` - all nodes and associated IPs are here under Ansible
+  - `inventory/hosts` - all nodes and associated IPs are here under Ansible **
 
   ```sh
   ubuntu@master0:~/ansible$ cat inventory/hosts
@@ -354,7 +354,7 @@ master0 ansible_host=10.39.64.10
 ansible_python_interpreter=/usr/bin/python3
 ```
 
-- `templates` in `jinja2` format
+- `templates` in `jinja2` format **
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
@@ -436,7 +436,7 @@ This action has been done before setting up Ansible as pre-requisite, unless oth
 - Kernel tuning: `inode`, `ulimit`, etc
 
 ### Docker
-#### Install docker
+#### Install docker ** (containerd.io)
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
@@ -467,11 +467,16 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 - name: Install docker
   apt:
     update_cache: yes
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
+    name: "{{ packages }}"
     state: present
+    update _cache: yes
+  vars:
+    packages:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+  notify:
+    - docker status
 ```
 
 > Reference >
@@ -487,8 +492,6 @@ This step is to prevent too many images from being downloaded over internet
 ### Kubernetes (specific version)
 
 #### Disable `swap`
-
-
 
 ```sh
 - name: Remove swapfile from /etc/fstab
