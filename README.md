@@ -21,8 +21,12 @@
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
   - [Kubernetes (specific version)](#kubernetes-specific-version)
     - [Disable `swap`](#disable-swap)
-    - [](#)
+    - [Install Kubernetes](#install-kubernetes)
     - [Init the cluster on `master` only](#init-the-cluster-on-master-only)
+    - [Grant `ubuntu` to manage Kubernetes](#grant-ubuntu-to-manage-kubernetes)
+    - [Install `flannel` network plugin (master only)](#install-flannel-network-plugin-master-only)
+    - [Create `kubeadm join` cmd](#create-kubeadm-join-cmd)
+    - [Join `master` in Kubernetes cluster](#join-master-in-kubernetes-cluster)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
@@ -489,6 +493,8 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 
 This step is to prevent too many images from being downloaded over internet
 
+---
+
 ### Kubernetes (specific version)
 
 #### Disable `swap`
@@ -510,7 +516,7 @@ This step is to prevent too many images from being downloaded over internet
 
 > Reference > https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/
 
-####
+#### Install Kubernetes
 
 ```sh
 - name: Add an apt signing key for Kubernetes
@@ -553,6 +559,66 @@ This step is to prevent too many images from being downloaded over internet
 - name: Initialize the Kubernetes cluster using kubeadm
   command: kubeadm init --apiserver-advertise-address="192.168.50.10" --apiserver-cert-extra-sans="192.168.50.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
 ```
+
+#### Grant `ubuntu` to manage Kubernetes
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
+---
+# tasks file for k8s_usr_grant
+- name: Setup kubeconfig for ubuntu user
+  command: "{{ item }}"
+  with_items:
+   - mkdir -p /home/ubuntu/.kube
+   - cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+   - chown ubuntu:ubuntu /home/ubuntu/.kube/config
+```
+
+You have to logout then login again to pick up the change!
+
+#### Install `flannel` network plugin (master only)
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_flannel/tasks/main.yml
+---
+# tasks file for k8s_flannel
+- name: Install flannel pod network
+  become: false
+  command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+```
+
+> Reference > https://github.com/flannel-io/flannel
+
+#### Create `kubeadm join` cmd
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_join_cmd/tasks/main.yml
+---
+# tasks file for k8s_join_cmd
+- name: Generate join command
+  command: kubeadm token create --print-join-command
+  register: join_command
+
+- name: Copy join command to local file
+  local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
+```
+
+#### Join `master` in Kubernetes cluster
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
+---
+# tasks file for k8s_join_node
+- name: Copy the join command to server location
+  copy: src=join-command dest=/tmp/join-command.sh mode=0777
+
+- name: Join the node to cluster
+  command: sh /tmp/join-command.sh
+```
+
+
+
+
 
 - Grant appropriate access for nonroot user for both
 - Create persistentVolume
