@@ -53,7 +53,7 @@
 - An existing virtual_machine platform. Doesn't matter they're from OpenStack, or VMware, or AWS/ Azure (deploy-able by Ansible or Terraform)
 - The virtual_machines are networked functionally. `jumpBox` and `vantiqSystem`, in the next figure, can be in separate sub-network (eg, `10.0.10.0/24` and `10.0.20.0/24`) or the same. If in separate networks, they must be accessible to each other
 - Need several block-disks for MongoDB and others
-- A DNS that can resolve service.domain.com, or a local `/etc/hosts` must be modified as well as `nging-ingress` accordingly
+- A DNS that can resolve service.domain.com, or a local `/etc/hosts` must be modified as well as `nginx-ingress` accordingly
 
 ## Architecture Overview **
 
@@ -292,12 +292,19 @@ ubuntu@master0:~/ansible$ cat main.yaml
     # - { role: os_hostname_set, when: "inventory_hostname in groups['worker']" }
     # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
     # - { role: docker_install, when: "inventory_hostname in groups['all']" }
-    - { role: os_usr_create, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_usr_create, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_swap_disable, when: "inventory_hostname in groups['all']" }
+    # - { role: k8s_install, when: "inventory_hostname in groups['all']" }
+    # - { role: k8s_init, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_usr_grant, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_flannel, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_join_cmd, when: "inventory_hostname in groups['master']" }
+    - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
 ```
 
 - Standard playbook execution command
 
-__Make sure comment out `roles` in `main.yaml` for particular action you want to perform__. Comment out all to execute all actions in one click. The `role` value in `main.yaml` must be identical to the one created by `ansible-galaxy init`
+__Make sure comment out `roles` in `main.yaml` for particular action you want to perform__. Uncomment out all to execute all actions in one click. The `role` value in `main.yaml` must be identical to the one created by `ansible-galaxy init`
 
 ```sh
 ansible-playbook --extra-vars @global.yaml main.yaml
