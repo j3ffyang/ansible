@@ -9,11 +9,14 @@
 - [Deployment Workflow](#deployment-workflow)
   - [Prototype Environment **](#prototype-environment)
   - [System Hardening](#system-hardening)
+    - [`sshd`](#sshd)
+    - [`firewalld`](#firewalld)
+    - [Firewall Rules for `kubeadm`](#firewall-rules-for-kubeadm)
   - [Ansible Env Setup](#ansible-env-setup)
   - [Operating System](#operating-system)
-    - [Delete unused packages - `role: os_pkg_rm`](#delete-unused-packages-role-os_pkg_rm)
+    - [Delete Unused Packages - `role: os_pkg_rm`](#delete-unused-packages-role-os_pkg_rm)
     - [Set `/etc/hosts` - `role: os_hosts_mod`](#set-etchosts-role-os_hosts_mod)
-    - [Set hostname to all nodes](#set-hostname-to-all-nodes)
+    - [Set `hostname` to All Nodes](#set-hostname-to-all-nodes)
     - [Create a `nonroot` user on all nodes, including `control` node](#create-a-nonroot-user-on-all-nodes-including-control-node)
   - [Docker](#docker)
     - [Install docker ** (containerd.io)](#install-docker-containerdio)
@@ -23,15 +26,17 @@
     - [Disable `swap`](#disable-swap)
     - [Install Kubernetes](#install-kubernetes)
     - [Init the cluster on `master` only](#init-the-cluster-on-master-only)
-    - [Grant permission to `ubuntu` to manage Kubernetes](#grant-permission-to-ubuntu-to-manage-kubernetes)
-    - [Install `flannel` network plugin (master only)](#install-flannel-network-plugin-master-only)
-    - [Create `kubeadm join` cmd](#create-kubeadm-join-cmd)
+    - [Grant Permission to `ubuntu` to Manage Kubernetes](#grant-permission-to-ubuntu-to-manage-kubernetes)
+    - [Install `flannel` Network Plugin (master only)](#install-flannel-network-plugin-master-only)
+    - [Create `kubeadm join` Command](#create-kubeadm-join-command)
     - [Join `master` in Kubernetes cluster](#join-master-in-kubernetes-cluster)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
+    - [Create persistentVolume?](#create-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
+  - [Install `helm3`](#install-helm3)
   - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
     - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
@@ -46,13 +51,13 @@
 
 - This is an environment for production and it is not an airgap scenario
 - Simplify deployment of a Kubernetes platform and a bunch of common applications, such as Nginx, PostgreSQL, Prometheus, etc
-- Deploy jumpbox (DMZ) and upfront Nginx webServer, manage system hardening, configure firewall
+- Deploy bastion-host (DMZ) and upfront Nginx webServer, manage system hardening, configure firewall
 - Define a kind of standardized environment where VANTIQ product can be deployed, as well as operational and manage-able, other than conforming cloud service provider
 
 ## Pre-requisite
 
 - An existing virtual_machine platform. Doesn't matter they're from OpenStack, or VMware, or AWS/ Azure (deploy-able by Ansible or Terraform)
-- The virtual_machines are networked functionally. `jumpBox` and `vantiqSystem`, in the next figure, can be in separate sub-network (eg, `10.0.10.0/24` and `10.0.20.0/24`) or the same. If in separate networks, they must be accessible to each other
+- The virtual_machines are networked functionally. `bastion-host` and `vantiqSystem`, in the next figure, can be in separate sub-network (eg, `10.0.10.0/24` and `10.0.20.0/24`) or the same. If in separate networks, they must be accessible to each other
 - Need several block-disks for MongoDB and others
 - A DNS that can resolve service.domain.com, or a local `/etc/hosts` must be modified as well as `nginx-ingress` accordingly
 
@@ -62,7 +67,7 @@
 
 cloud freeWorld
 
-package jumpBox {
+package bastion-host {
   package webServer {
     collections nginx
     collections lb
@@ -110,8 +115,9 @@ worker1 | 10.39.64.21 | 2c8g
 
 ### System Hardening
 
-This is specifically setup for jumpbox. __Only__ jumpbox can be accessed from internet
+This is specifically setup for bastion-host. __Only__ bastion-host can be accessed from internet
 
+#### `sshd`
 - `/etc/ssh/sshd_config`
 ```sh
 PermitRootLogin prohibit-password
@@ -119,10 +125,8 @@ PubkeyAuthentication yes
 PasswordAuthentication no
 ```
 
-- `firewalld`
-  - `masquerade`
-
-  ```sh
+#### `firewalld`
+```sh
   ubuntu@master0:~/ansible$ sudo firewall-cmd --list-all
   public
     target: default
@@ -137,14 +141,49 @@ PasswordAuthentication no
     source-ports:
     icmp-blocks:
     rich rules:
-  ```
+```
+
+#### Firewall Rules for `kubeadm`
+
+```sh
+ubuntu@master0:~$ firewall-cmd --get-active-zones
+docker
+  interfaces: docker0
+
+ubuntu@master0:~$ firewall-cmd --get-default-zone
+public
+
+ubuntu@master0:~$ sudo firewall-cmd --permanent --zone=internal --add-interface=eth0
+ubuntu@master0:~$ sudo firewall-cmd --reload
+success
+
+ubuntu@master0:~$ firewall-cmd --get-default-zone
+public
+ubuntu@master0:~$ firewall-cmd --get-active-zones
+docker
+  interfaces: docker0
+internal
+  interfaces: eth0
+
+ubuntu@master0:~$ sudo firewall-cmd --permanent --zone=internal --set-target=ACCEPT
+success
+ubuntu@master0:~$ sudo firewall-cmd --reload
+success
+```
+
+Allow all traffic for `internal` network on `eth0` interface only
+
 
 - Kernel tuning and enable `ip_forward` for `masquerade`
 
 
 - Port open (VM level. Still need configuration in security group from cloud service provider):
-  - TCP: `80`, `443`, `22`
-  - UDP: `12345` for wireGuard
+- TCP: `80`, `443`, `22`
+- UDP: `12345` for wireGuard
+
+
+
+
 
 ### Ansible Env Setup
 
@@ -315,7 +354,7 @@ ansible-playbook --extra-vars @global.yaml main.yaml
 
 ### Operating System
 
-#### Delete unused packages - `role: os_pkg_rm`
+#### Delete Unused Packages - `role: os_pkg_rm`
 
   ```sh
   cat roles/os_pkg_rm/tasks/main.yml
@@ -393,7 +432,7 @@ ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/tasks/main.yml
 
 > Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
 
-#### Set hostname to all nodes
+#### Set `hostname` to All Nodes
 
 According to `/etc/hosts` on `control node`
 
@@ -568,7 +607,7 @@ This step is to prevent too many images from being downloaded over internet
   command: kubeadm init --apiserver-advertise-address="192.168.50.10" --apiserver-cert-extra-sans="192.168.50.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
 ```
 
-#### Grant permission to `ubuntu` to manage Kubernetes
+#### Grant Permission to `ubuntu` to Manage Kubernetes
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
@@ -584,7 +623,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
 
 You have to logout then login again to pick up the change!
 
-#### Install `flannel` network plugin (master only)
+#### Install `flannel` Network Plugin (master only)
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_flannel/tasks/main.yml
@@ -597,7 +636,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_flannel/tasks/main.yml
 
 > Reference > https://github.com/flannel-io/flannel
 
-#### Create `kubeadm join` cmd
+#### Create `kubeadm join` Command
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_join_cmd/tasks/main.yml
@@ -624,15 +663,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
   command: sh /tmp/join-command.sh
 ```
 
-
-
-
-
-- Grant appropriate access for nonroot user for both
-- Create persistentVolume
-
 #### Components on Kubernetes
-- Use `helm3`3
 - `prometheus` for monitoring
 - `postgreSQL` for Keycloak
 - `cert-manager` for automated certificate issuing
@@ -641,11 +672,15 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 - Apply custom SSL
 - Apply VANTIQ license key
 
+#### Create persistentVolume?
+
 #### Kubernetes upgrade for an existing cluster
 
 #### Airgap Docker and Kubernetes Install
 
 #### Configure Kubernetes HA
+
+### Install `helm3`
 
 ### Upfront Nginx Web Server on VM(s)
 - HA. Refer to Full HA of Nginx in Appendix
