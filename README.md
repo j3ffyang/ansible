@@ -23,7 +23,7 @@
     - [Disable `swap`](#disable-swap)
     - [Install Kubernetes](#install-kubernetes)
     - [Init the cluster on `master` only](#init-the-cluster-on-master-only)
-    - [Grant `ubuntu` to manage Kubernetes](#grant-ubuntu-to-manage-kubernetes)
+    - [Grant permission to `ubuntu` to manage Kubernetes](#grant-permission-to-ubuntu-to-manage-kubernetes)
     - [Install `flannel` network plugin (master only)](#install-flannel-network-plugin-master-only)
     - [Create `kubeadm join` cmd](#create-kubeadm-join-cmd)
     - [Join `master` in Kubernetes cluster](#join-master-in-kubernetes-cluster)
@@ -31,6 +31,7 @@
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
+    - [Configure Kubernetes HA](#configure-kubernetes-ha)
   - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
     - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
@@ -567,7 +568,7 @@ This step is to prevent too many images from being downloaded over internet
   command: kubeadm init --apiserver-advertise-address="192.168.50.10" --apiserver-cert-extra-sans="192.168.50.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
 ```
 
-#### Grant `ubuntu` to manage Kubernetes
+#### Grant permission to `ubuntu` to manage Kubernetes
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
@@ -631,7 +632,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 - Create persistentVolume
 
 #### Components on Kubernetes
-- Use `helm3`
+- Use `helm3`3
 - `prometheus` for monitoring
 - `postgreSQL` for Keycloak
 - `cert-manager` for automated certificate issuing
@@ -643,6 +644,8 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 #### Kubernetes upgrade for an existing cluster
 
 #### Airgap Docker and Kubernetes Install
+
+#### Configure Kubernetes HA
 
 ### Upfront Nginx Web Server on VM(s)
 - HA. Refer to Full HA of Nginx in Appendix
