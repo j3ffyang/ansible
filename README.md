@@ -670,7 +670,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 
 #### Nginx and Ingress Network Controller on Kubernetes
 - Apply custom SSL
-- Apply VANTIQ license key
+- ~~Apply VANTIQ license key~~
 
 #### Create persistentVolume?
 
@@ -681,6 +681,12 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 #### Configure Kubernetes HA
 
 ### Install `helm3`
+
+Follow the instruction at https://helm.sh/docs/intro/install/
+
+```sh
+curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+```
 
 ### Upfront Nginx Web Server on VM(s)
 - HA. Refer to Full HA of Nginx in Appendix
