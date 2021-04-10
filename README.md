@@ -30,14 +30,15 @@
     - [Install `flannel` Network Plugin (master only)](#install-flannel-network-plugin-master-only)
     - [Create `kubeadm join` Command](#create-kubeadm-join-command)
     - [Join `master` in Kubernetes cluster](#join-master-in-kubernetes-cluster)
-    - [Components on Kubernetes](#components-on-kubernetes)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Create persistentVolume?](#create-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
-  - [Install `helm3`](#install-helm3)
-  - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
+  - [Helm3](#helm3)
+    - [Install `helm3`](#install-helm3)
+    - [Components on Kubernetes](#components-on-kubernetes)
+    - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
     - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
 - [Appendix](#appendix)
@@ -663,11 +664,6 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
   command: sh /tmp/join-command.sh
 ```
 
-#### Components on Kubernetes
-- `prometheus` for monitoring
-- `postgreSQL` for Keycloak
-- `cert-manager` for automated certificate issuing
-
 #### Nginx and Ingress Network Controller on Kubernetes
 - Apply custom SSL
 - ~~Apply VANTIQ license key~~
@@ -680,15 +676,45 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 
 #### Configure Kubernetes HA
 
-### Install `helm3`
+---
 
-Follow the instruction at https://helm.sh/docs/intro/install/
+### Helm3
+
+#### Install `helm3`
+
+Up to the date that I write this document, `helm` version = `v3.5.3`
 
 ```sh
-curl https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3 | bash
+ubuntu@master0:~/ansible$ cat roles/helm3_install/tasks/main.yml
+---
+- name: Retrieve helm bin
+  unarchive:
+    src: https://get.helm.sh/helm-v3.5.3-linux-amd64.tar.gz
+    dest: /tmp
+    creates: /usr/local/bin/helm
+    remote_src: yes
+
+- name: Move helm binary into place
+  command: cp /tmp/linux-amd64/helm /usr/local/bin/helm
+  args:
+    creates: /usr/local/bin/helm
+
+- name: Add Bitani chart repo
+  community.kubernetes.helm_repository:
+    name: bitami
+    repo_url: "https://charts.bitnami.com/bitnami"
 ```
 
-### Upfront Nginx Web Server on VM(s)
+> Reference >
+https://github.com/geerlingguy/ansible-for-devops/blob/master/kubernetes/examples/helm.yml
+https://www.ansible.com/blog/automating-helm-using-ansible
+
+#### Components on Kubernetes
+- `prometheus` for monitoring
+- `postgreSQL` for Keycloak
+- `cert-manager` for automated certificate issuing
+
+#### Upfront Nginx Web Server on VM(s)
 - HA. Refer to Full HA of Nginx in Appendix
 - LB
   - Get all `worker_node` from Kubernetes
