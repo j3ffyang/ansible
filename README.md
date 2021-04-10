@@ -16,27 +16,27 @@
   - [Operating System](#operating-system)
     - [Delete Unused Packages - `role: os_pkg_rm`](#delete-unused-packages-role-os_pkg_rm)
     - [Set `/etc/hosts` - `role: os_hosts_mod`](#set-etchosts-role-os_hosts_mod)
-    - [Set `hostname` to All Nodes](#set-hostname-to-all-nodes)
-    - [Create a `nonroot` user on all nodes, including `control` node](#create-a-nonroot-user-on-all-nodes-including-control-node)
+    - [Set `hostname` to All Nodes - `role: os_hostname_set`](#set-hostname-to-all-nodes-role-os_hostname_set)
+    - [Create a `nonroot` user on all nodes, including `control` node - `role: os_usr_create`](#create-a-nonroot-user-on-all-nodes-including-control-node-role-os_usr_create)
   - [Docker](#docker)
-    - [Install docker ** (containerd.io)](#install-docker-containerdio)
+    - [Install docker ** (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
     - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
   - [Kubernetes (specific version)](#kubernetes-specific-version)
-    - [Disable `swap`](#disable-swap)
-    - [Install Kubernetes](#install-kubernetes)
-    - [Init the cluster on `master` only](#init-the-cluster-on-master-only)
-    - [Grant Permission to `ubuntu` to Manage Kubernetes](#grant-permission-to-ubuntu-to-manage-kubernetes)
-    - [Install `flannel` Network Plugin (master only)](#install-flannel-network-plugin-master-only)
-    - [Create `kubeadm join` Command](#create-kubeadm-join-command)
-    - [Join `master` in Kubernetes cluster](#join-master-in-kubernetes-cluster)
+    - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
+    - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
+    - [Init the cluster on `master` only - `role: k8s_init`](#init-the-cluster-on-master-only-role-k8s_init)
+    - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_usr_grant)
+    - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
+    - [Create `kubeadm join` Command - `role: k8s_join_cmd`](#create-kubeadm-join-command-role-k8s_join_cmd)
+    - [Join `master` in Kubernetes cluster - `role: k8s_join_node`](#join-master-in-kubernetes-cluster-role-k8s_join_node)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Create persistentVolume?](#create-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
   - [Helm3](#helm3)
-    - [Install `helm3`](#install-helm3)
+    - [Install `helm3` - `role: helm3_install`](#install-helm3-role-helm3_install)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
@@ -433,7 +433,7 @@ ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/tasks/main.yml
 
 > Reference > https://www.howtoforge.com/ansible-guide-manage-files-using-ansible/
 
-#### Set `hostname` to All Nodes
+#### Set `hostname` to All Nodes - `role: os_hostname_set`
 
 According to `/etc/hosts` on `control node`
 
@@ -447,7 +447,7 @@ According to `/etc/hosts` on `control node`
       name: "{{inventory_hostname}}"
   ```
 
-#### Create a `nonroot` user on all nodes, including `control` node
+#### Create a `nonroot` user on all nodes, including `control` node - `role: os_usr_create`
 
   This supposes to create a `nonroot` user, to manage Docker and Kubernetes, in case a specific user has been occupied already in customer's environment. For example, `ubuntu` user is not allowed to be used.
 
@@ -488,7 +488,7 @@ This action has been done before setting up Ansible as pre-requisite, unless oth
 - Kernel tuning: `inode`, `ulimit`, etc
 
 ### Docker
-#### Install docker ** (containerd.io)
+#### Install docker ** (containerd.io) - `role: docker_install`
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
@@ -545,9 +545,12 @@ This step is to prevent too many images from being downloaded over internet
 
 ### Kubernetes (specific version)
 
-#### Disable `swap`
+#### Disable `swap` - `role: os_swap_disable`
 
 ```sh
+ubuntu@master0:~/ansible$ cat roles/os_swap_disable/tasks/main.yml
+---
+# tasks file for os_swap_disable
 - name: Remove swapfile from /etc/fstab
   mount:
     name: "{{ item }}"
@@ -564,9 +567,12 @@ This step is to prevent too many images from being downloaded over internet
 
 > Reference > https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/
 
-#### Install Kubernetes
+#### Install Kubernetes - `role: k8s_install`
 
 ```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
+---
+# tasks file for k8s_install
 - name: Add an apt signing key for Kubernetes
   apt_key:
     url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
@@ -589,10 +595,13 @@ This step is to prevent too many images from being downloaded over internet
       - kubeadm
       - kubectl
 
-- name: Configure node ip
-  lineinfile:
-    path: /etc/default/kubelet
-    line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+        # - name: Configure node ip
+        #   lineinfile:
+        #     path: /etc/default/kubelet
+        #     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+        #   vars:
+        #     node_ip:
+        #       - 10.39.64.10
 
 - name: Restart kubelet
   service:
@@ -601,14 +610,17 @@ This step is to prevent too many images from being downloaded over internet
     state: restarted
 ```
 
-#### Init the cluster on `master` only
+#### Init the cluster on `master` only - `role: k8s_init`
 
 ```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_init/tasks/main.yml
+---
+# tasks file for k8s_init
 - name: Initialize the Kubernetes cluster using kubeadm
-  command: kubeadm init --apiserver-advertise-address="192.168.50.10" --apiserver-cert-extra-sans="192.168.50.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
+  command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
 ```
 
-#### Grant Permission to `ubuntu` to Manage Kubernetes
+#### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
@@ -624,7 +636,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
 
 You have to logout then login again to pick up the change!
 
-#### Install `flannel` Network Plugin (master only)
+#### Install `flannel` Network Plugin (master only) - `role: k8s_flannel`
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_flannel/tasks/main.yml
@@ -637,7 +649,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_flannel/tasks/main.yml
 
 > Reference > https://github.com/flannel-io/flannel
 
-#### Create `kubeadm join` Command
+#### Create `kubeadm join` Command - `role: k8s_join_cmd`
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_join_cmd/tasks/main.yml
@@ -651,7 +663,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_cmd/tasks/main.yml
   local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
 ```
 
-#### Join `master` in Kubernetes cluster
+#### Join `master` in Kubernetes cluster - `role: k8s_join_node`
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
@@ -680,7 +692,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 
 ### Helm3
 
-#### Install `helm3`
+#### Install `helm3` - `role: helm3_install`
 
 Up to the date that I write this document, `helm` version = `v3.5.3`
 
