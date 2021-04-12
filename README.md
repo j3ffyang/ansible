@@ -25,11 +25,12 @@
   - [Kubernetes (specific version)](#kubernetes-specific-version)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
     - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
-    - [Init the cluster on `master` only - `role: k8s_init`](#init-the-cluster-on-master-only-role-k8s_init)
-    - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_usr_grant)
+    - [Init the cluster on `master` only - `role: k8s_init` **](#init-the-cluster-on-master-only-role-k8s_init)
+    - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant` **](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_usr_grant)
     - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
     - [Create `kubeadm join` Command - `role: k8s_join_cmd`](#create-kubeadm-join-command-role-k8s_join_cmd)
     - [Join `master` in Kubernetes cluster - `role: k8s_join_node`](#join-master-in-kubernetes-cluster-role-k8s_join_node)
+    - [Destroy Entire Kubernetes Cluster](#destroy-entire-kubernetes-cluster)
     - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
     - [Create persistentVolume?](#create-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
@@ -37,6 +38,8 @@
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
   - [Helm3](#helm3)
     - [Install `helm3` - `role: helm3_install`](#install-helm3-role-helm3_install)
+    - [Ingress](#ingress)
+    - [Prometheus](#prometheus)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
@@ -610,17 +613,19 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
     state: restarted
 ```
 
-#### Init the cluster on `master` only - `role: k8s_init`
+#### Init the cluster on `master` only - `role: k8s_init` **
+
+`--apiserver-advertise-address` is `master0` IP address
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_init/tasks/main.yml
 ---
 # tasks file for k8s_init
 - name: Initialize the Kubernetes cluster using kubeadm
-  command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10"  --node-name k8s-master --pod-network-cidr=192.168.0.0/16
+  command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10"  --node-name k8s-master --pod-network-cidr=10.10.0.0/16
 ```
 
-#### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`
+#### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant` **
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
@@ -631,10 +636,23 @@ ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
   with_items:
    - mkdir -p /home/ubuntu/.kube
    - cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
-   - chown ubuntu:ubuntu /home/ubuntu/.kube/config
+   - chown -R ubuntu:ubuntu /home/ubuntu/.kube
 ```
 
 You have to logout then login again to pick up the change!
+
+If `/home/ubuntu/.kube` isn't owned by `ubuntu.ubuntu`, instead, owned by `root.root`, the following error would appear
+
+```sh
+ubuntu@master0:~/.kube$ kubectl get all --all-namespaces
+I0412 08:13:35.339148   11404 request.go:668] Waited for 1.152966258s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/policy/v1?timeout=32s
+I0412 08:13:45.339837   11404 request.go:668] Waited for 6.198896723s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/apiextensions.k8s.io/v1beta1?timeout=32s
+I0412 08:13:56.739889   11404 request.go:668] Waited for 1.19751473s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/events.k8s.io/v1?timeout=32s
+I0412 08:14:06.939134   11404 request.go:668] Waited for 3.191095759s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/admissionregistration.k8s.io/v1?timeout=32s
+I0412 08:14:16.939176   11404 request.go:668] Waited for 4.997458384s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/scheduling.k8s.io/v1?timeout=32s
+I0412 08:14:27.139494   11404 request.go:668] Waited for 6.99703677s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/networking.k8s.io/v1beta1?timeout=32s
+I0412 08:14:37.739217   11404 request.go:668] Waited for 1.197000394s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/authentication.k8s.io/v1?timeout=32s
+```
 
 #### Install `flannel` Network Plugin (master only) - `role: k8s_flannel`
 
@@ -675,6 +693,29 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 - name: Join the node to cluster
   command: sh /tmp/join-command.sh
 ```
+
+#### Destroy Entire Kubernetes Cluster
+
+Run the following on each of nodes
+
+```sh
+sudo kubeadm reset
+
+sudo apt purge kubectl kubeadm kubelet kubernetes-cni -y
+sudo apt autoremove
+sudo rm -fr /etc/kubernetes/; sudo rm -fr ~/.kube/; sudo rm -fr /var/lib/etcd; sudo rm -rf /var/lib/cni/
+
+sudo systemctl daemon-reload
+
+sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sudo iptables -X
+
+# remove all running docker containers
+docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
+```
+
+Consult with this reference, if you want to remove `docker` as well
+
+> Reference > https://hiberstack.com/10677/how-to-uninstall-docker-and-kubernetes/
 
 #### Nginx and Ingress Network Controller on Kubernetes
 - Apply custom SSL
@@ -720,6 +761,29 @@ ubuntu@master0:~/ansible$ cat roles/helm3_install/tasks/main.yml
 > Reference >
 https://github.com/geerlingguy/ansible-for-devops/blob/master/kubernetes/examples/helm.yml
 https://www.ansible.com/blog/automating-helm-using-ansible
+
+#### Ingress
+
+```sh
+- name: Add stable chart repo
+  community.kubernetes.helm_repository:
+    name: stable
+    repo_url: "https://kubernetes.github.io/ingress-nginx"
+```
+
+#### Prometheus
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
+---
+# tasks file for prometheus
+- name: Deploy latest version of Prometheus chart inside monitoring namespace (and create it)
+  community.kubernetes.helm:
+    name: prom
+    chart_ref: stable/prometheus
+    release_namespace: monitoring
+    create_namespace: true
+```
 
 #### Components on Kubernetes
 - `prometheus` for monitoring
