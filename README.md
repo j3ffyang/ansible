@@ -31,8 +31,7 @@
     - [Create `kubeadm join` Command - `role: k8s_join_cmd`](#create-kubeadm-join-command-role-k8s_join_cmd)
     - [Join `master` in Kubernetes cluster - `role: k8s_join_node`](#join-master-in-kubernetes-cluster-role-k8s_join_node)
     - [Destroy Entire Kubernetes Cluster](#destroy-entire-kubernetes-cluster)
-    - [Nginx and Ingress Network Controller on Kubernetes](#nginx-and-ingress-network-controller-on-kubernetes)
-    - [Create persistentVolume?](#create-persistentvolume)
+    - [Create Custom persistentVolume?](#create-custom-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
@@ -717,11 +716,11 @@ Consult with this reference, if you want to remove `docker` as well
 
 > Reference > https://hiberstack.com/10677/how-to-uninstall-docker-and-kubernetes/
 
-#### Nginx and Ingress Network Controller on Kubernetes
-- Apply custom SSL
-- ~~Apply VANTIQ license key~~
+#### Create Custom persistentVolume?
 
-#### Create persistentVolume?
+- `lsblk`
+- `fdisk` > create partition > w
+- `mkfs.ext4` or `mkfs.xfs` for `mongoDB`
 
 #### Kubernetes upgrade for an existing cluster
 
