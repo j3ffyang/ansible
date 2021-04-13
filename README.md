@@ -598,13 +598,13 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
       - kubeadm
       - kubectl
 
-        # - name: Configure node ip
-        #   lineinfile:
-        #     path: /etc/default/kubelet
-        #     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
-        #   vars:
-        #     node_ip:
-        #       - 10.39.64.10
+# - name: Configure node ip
+#   lineinfile:
+#     path: /etc/default/kubelet
+#     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+#   vars:
+#     node_ip:
+#       - 10.39.64.10
 
 - name: Restart kubelet
   service:
