@@ -1,0 +1,7 @@
+---
+# tasks file for os_ssh_auth
+- name: Set authorized key took from file
+  authorized_key:
+    user: ubuntu
+    state: present
+    key: "{{ lookup('file', '/home/ubuntu/.ssh/id_rsa.pub') }}"

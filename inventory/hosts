@@ -1,7 +1,12 @@
-[vantiq]
-vantiq1 hostname=vantiq1
-vantiq2 hostname=vantiq2
-vantiq3 hostname=vantiq3
+[worker]
+worker0	ansible_host=10.39.64.20
+worker1 ansible_host=10.39.64.21
 
 [controller]
-nxyw205
+master0 ansible_host=10.39.64.10
+
+[master]
+master0 ansible_host=10.39.64.10
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3

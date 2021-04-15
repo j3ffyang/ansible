@@ -1,0 +1,4 @@
+---
+# tasks file for k8s_init
+- name: Initialize the Kubernetes cluster using kubeadm
+  command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10"  --node-name k8s-master --pod-network-cidr=10.10.0.0/16

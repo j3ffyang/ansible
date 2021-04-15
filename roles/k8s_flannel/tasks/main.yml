@@ -1,0 +1,5 @@
+---
+# tasks file for k8s_flannel
+- name: Install flannel pod network
+  become: false
+  command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml

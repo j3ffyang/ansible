@@ -1,9 +1,0 @@
-- hosts: vantiq
-  tasks:
-  - name: Adding user nxyw into docker group
-    become: yes
-    become_user: root
-    user:
-        name: nxyw
-        groups: docker
-        append: yes

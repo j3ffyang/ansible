@@ -1,0 +1,8 @@
+---
+# tasks file for test
+- name: Here we are checking ansible_hostname
+  debug:
+    msg: "hostname is {{ ansible_hostname }}"
+- name: Here we are checking inventory_hostname
+  debug:
+    msg: "hostname is {{ inventory_hostname }}"

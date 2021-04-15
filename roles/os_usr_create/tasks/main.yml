@@ -1,0 +1,13 @@
+---
+# tasks file for os_usr_create
+
+- name: Create a nonroot user
+  user: 
+    name: "{{ uusername }}"
+    password: "{{ vaulted_passwd | password_hash('sha512') }}"
+    shell: /bin/bash
+    groups: docker
+    append: yes
+    generate_ssh_key: yes
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/id_rsa

@@ -1,0 +1,11 @@
+---
+# tasks file for k8s_autocompletion
+- name: update ~/.bashrc for kubectl & kubeadm autocompletion for ubuntu user
+  blockinfile:
+    dest: /home/ubuntu/.bashrc
+    block: |
+      source <(kubectl completion bash)
+      source <(kubeadm completion bash)
+      alias k=kubectl
+      complete -F __start_kubectl k
+    backup: yes

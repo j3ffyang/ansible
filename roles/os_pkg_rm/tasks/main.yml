@@ -1,0 +1,15 @@
+---
+# tasks file for os_pkg_rm
+- name: Remove "snapd" package
+  apt:
+    name: snapd
+    state: absent
+
+- name: Remove "ufw" package
+  apt:
+    name: ufw
+    state: absent
+
+- name: Remove dependencies that are no longer required
+  apt:
+    autoremove: yes

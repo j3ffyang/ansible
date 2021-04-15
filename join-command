@@ -1,0 +1,1 @@
+kubeadm join 10.39.64.10:6443 --token cjuwyo.qod3ipl8uq4wwe8w --discovery-token-ca-cert-hash sha256:95313cd8b1a23ffb2da80f75668ea98ce21b2b64fb8be934ca594d1db2c674fd 

@@ -1,7 +1,24 @@
 - hosts: all
-  gather_facts: False
-  become: True
+  become: true
+
   roles:
-  # - { role: k8s_worker_node, when: "inventory_hostname in groups['vantiq']" }
-  # - { role: os, when: "inventory_hostname in groups['vantiq']" }
-  - { role: pull_img_k8s, when: "inventory_hostname in groups['vantiq']" }
+    # - { role: os_hostname_display, when: "inventory_hostname in groups['all']" }
+    # - { role: os_pkg_rm, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_hosts_mod, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_hosts_cp, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_hostname_set, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
+    # - { role: docker_install, when: "inventory_hostname in groups['all']" }
+    # - { role: os_usr_create, when: "inventory_hostname in groups['all']" }
+    # - { role: os_swap_disable, when: "inventory_hostname in groups['all']" }
+    # - { role: k8s_install, when: "inventory_hostname in groups['all']" }
+    # - { role: k8s_init, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_usr_grant, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_flannel, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_join_cmd, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
+    # - { role: k8s_autocompletion, when: "inventory_hostname in groups['controller']" }
+    - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
+    # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
+    # - { role: prometheus, when: "inventory_hostname in groups['master']" }
+    # - { role: kubeseal, when: "inventory_hostname in groups['master']" }

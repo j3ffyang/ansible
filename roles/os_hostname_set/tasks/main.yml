@@ -1,0 +1,6 @@
+---
+# tasks file for os_hostname_set
+
+- name: hostnamectl set-hostname
+  hostname:
+    name: "{{inventory_hostname}}"

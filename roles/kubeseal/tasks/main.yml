@@ -1,0 +1,11 @@
+---
+# tasks file for kubeseal
+
+- name: Add helm repo
+  become: yes
+  become_user: ubuntu
+  vars:
+    chart_repo_url: "https://bitnami-labs.github.io/sealed-secrets"
+  kubernetes.core.helm_repository:
+    name: bitnami
+    repo_url: "{{ chart_repo_url }}"

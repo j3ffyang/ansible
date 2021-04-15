@@ -7,7 +7,7 @@
 - [Pre-requisite](#pre-requisite)
 - [Architecture Overview **](#architecture-overview)
 - [Deployment Workflow](#deployment-workflow)
-  - [Prototype Environment **](#prototype-environment)
+  - [Prototype Environment](#prototype-environment)
   - [System Hardening](#system-hardening)
     - [`sshd`](#sshd)
     - [`firewalld`](#firewalld)
@@ -19,25 +19,27 @@
     - [Set `hostname` to All Nodes - `role: os_hostname_set`](#set-hostname-to-all-nodes-role-os_hostname_set)
     - [Create a `nonroot` user on all nodes, including `control` node - `role: os_usr_create`](#create-a-nonroot-user-on-all-nodes-including-control-node-role-os_usr_create)
   - [Docker](#docker)
-    - [Install docker ** (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
+    - [Install docker (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
     - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
   - [Kubernetes (specific version)](#kubernetes-specific-version)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
     - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
-    - [Init the cluster on `master` only - `role: k8s_init` **](#init-the-cluster-on-master-only-role-k8s_init)
-    - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant` **](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_usr_grant)
+    - [Init the cluster on `master` only - `role: k8s_init`](#init-the-cluster-on-master-only-role-k8s_init)
+    - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_usr_grant)
     - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
     - [Create `kubeadm join` Command - `role: k8s_join_cmd`](#create-kubeadm-join-command-role-k8s_join_cmd)
     - [Join `master` in Kubernetes cluster - `role: k8s_join_node`](#join-master-in-kubernetes-cluster-role-k8s_join_node)
     - [Destroy Entire Kubernetes Cluster](#destroy-entire-kubernetes-cluster)
+    - [(Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`](#optional-autocomplete-and-alias-for-kubectl-and-kubeadm-role-k8s_autocompletion)
     - [Create Custom persistentVolume?](#create-custom-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
   - [Helm3](#helm3)
-    - [Install `helm3` - `role: helm3_install`](#install-helm3-role-helm3_install)
-    - [Ingress](#ingress)
+    - [Install `helm3` - `role: helm3_install` **](#install-helm3-role-helm3_install)
+    - [`sealedSecrets` by `kubeseal`](#sealedsecrets-by-kubeseal)
+    - [`ingress-nginx` - `role: k8s_ingress_nginx`](#ingress-nginx-role-k8s_ingress_nginx)
     - [Prometheus](#prometheus)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
@@ -108,7 +110,7 @@ webServer --> nginx_ingress
 
 ## Deployment Workflow
 
-### Prototype Environment **
+### Prototype Environment
 
 name | ip | spec
 -- | -- | --
@@ -230,17 +232,19 @@ ubuntu@master0:~/ansible$ tree
 
 1 directory, 2 files
 ```
-- Important Configurations **
+- Basic Configurations
 
   - `ansible.cfg`
+
   ```sh
-  ubuntu@master0:~/ansible$ cat ansible.cfg
   [defaults]
 
-  inventory	= 	inventory/hosts
+  inventory               = inventory/hosts
+  strategy                = debug   # display debug message while running
+  # enable_task_debugger  = True
   ```
 
-  - `inventory/hosts` - all nodes and associated IPs are here under Ansible **
+  - `inventory/hosts` - all nodes and associated IPs are here under Ansible
 
   ```sh
   ubuntu@master0:~/ansible$ cat inventory/hosts
@@ -323,7 +327,6 @@ ubuntu@master0:~/ansible/roles/os_pkg_rm$ tree
 
 ```sh
 ubuntu@master0:~/ansible$ cat main.yaml
-
 - hosts: all
   become: true
 
@@ -335,14 +338,17 @@ ubuntu@master0:~/ansible$ cat main.yaml
     # - { role: os_hostname_set, when: "inventory_hostname in groups['worker']" }
     # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
     # - { role: docker_install, when: "inventory_hostname in groups['all']" }
-    # - { role: os_usr_create, when: "inventory_hostname in groups['worker']" }
+    # - { role: os_usr_create, when: "inventory_hostname in groups['all']" }
     # - { role: os_swap_disable, when: "inventory_hostname in groups['all']" }
     # - { role: k8s_install, when: "inventory_hostname in groups['all']" }
     # - { role: k8s_init, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_usr_grant, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_flannel, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_join_cmd, when: "inventory_hostname in groups['master']" }
-    - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
+    # - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
+    # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
+    - { role: prometheus, when: "inventory_hostname in groups['master']" }
+
 ```
 
 - Standard playbook execution command
@@ -408,7 +414,7 @@ master0 ansible_host=10.39.64.10
 ansible_python_interpreter=/usr/bin/python3
 ```
 
-- `templates` in `jinja2` format **
+- `templates` in `jinja2` format
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
@@ -490,7 +496,7 @@ This action has been done before setting up Ansible as pre-requisite, unless oth
 - Kernel tuning: `inode`, `ulimit`, etc
 
 ### Docker
-#### Install docker ** (containerd.io) - `role: docker_install`
+#### Install docker (containerd.io) - `role: docker_install`
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
@@ -612,7 +618,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
     state: restarted
 ```
 
-#### Init the cluster on `master` only - `role: k8s_init` **
+#### Init the cluster on `master` only - `role: k8s_init`
 
 `--apiserver-advertise-address` is `master0` IP address
 
@@ -624,7 +630,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_init/tasks/main.yml
   command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10"  --node-name k8s-master --pod-network-cidr=10.10.0.0/16
 ```
 
-#### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant` **
+#### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`
 
 ```sh
 ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
@@ -640,7 +646,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
 
 You have to logout then login again to pick up the change!
 
-If `/home/ubuntu/.kube` isn't owned by `ubuntu.ubuntu`, instead, owned by `root.root`, the following error would appear
+If `/home/ubuntu/.kube` isn't owned by `ubuntu.ubuntu`, but owned by `root.root` instead, the following error would appear
 
 ```sh
 ubuntu@master0:~/.kube$ kubectl get all --all-namespaces
@@ -652,6 +658,7 @@ I0412 08:14:16.939176   11404 request.go:668] Waited for 4.997458384s due to cli
 I0412 08:14:27.139494   11404 request.go:668] Waited for 6.99703677s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/networking.k8s.io/v1beta1?timeout=32s
 I0412 08:14:37.739217   11404 request.go:668] Waited for 1.197000394s due to client-side throttling, not priority and fairness, request: GET:https://10.39.64.10:6443/apis/authentication.k8s.io/v1?timeout=32s
 ```
+
 
 #### Install `flannel` Network Plugin (master only) - `role: k8s_flannel`
 
@@ -716,11 +723,47 @@ Consult with this reference, if you want to remove `docker` as well
 
 > Reference > https://hiberstack.com/10677/how-to-uninstall-docker-and-kubernetes/
 
+
+#### (Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`
+
+- Ansible code - run this on Ansible `controller` for `ubuntu` user only
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_autocompletion/tasks/main.yml
+---
+# tasks file for k8s_autocompletion
+- name: update ~/.bashrc for kubectl & kubeadm autocompletion for ubuntu user
+  blockinfile:
+    dest: /home/ubuntu/.bashrc
+    block: |
+      source <(kubectl completion bash)
+      source <(kubeadm completion bash)
+      alias k=kubectl
+      complete -F __start_kubectl k
+    backup: yes
+```
+
+- Manual step - add the following into `~/.bashrc` on Ansible `controller` for `ubuntu`
+
+```bash{.line-numbers}
+source <(kubectl completion bash)
+echo "source <(kubectl completion bash)" >> ~/.bashrc
+```
+
+```bash
+# alias and auto-completion
+alias k=kubectl
+complete -F __start_kubectl k
+```
+
 #### Create Custom persistentVolume?
 
 - `lsblk`
-- `fdisk` > create partition > w
-- `mkfs.ext4` or `mkfs.xfs` for `mongoDB`
+- `fdisk` > `n` to create partition > `w` to write configuration
+- `mkfs.xfs` for `mongoDB` and `mkfs.ext4` for others
+- `mount` to `/mnt/disks-by-id/diskX`
+- Update `/etc/fstab`
+- `storageClass`
 
 #### Kubernetes upgrade for an existing cluster
 
@@ -732,13 +775,42 @@ Consult with this reference, if you want to remove `docker` as well
 
 ### Helm3
 
-#### Install `helm3` - `role: helm3_install`
+#### Install `helm3` - `role: helm3_install` **
 
 Up to the date that I write this document, `helm` version = `v3.5.3`
 
+- Install `community.kubernetes` plugin
+```sh
+ansible-galaxy collection install community.kubernetes
+```
+
+- Ansible code
+
+Notice that we want to use `ubuntu` user to control `helm`, there are `become` and `become_user` privilege escalation defined, as `~/ansible/main.yaml` has a global `become: true` as `root`
+
 ```sh
 ubuntu@master0:~/ansible$ cat roles/helm3_install/tasks/main.yml
+
 ---
+# tasks file for helm3_install
+#- name: add gnupg key for codership repo
+#  apt-key: keyserver=keyserver.ubuntu.com id=BC19DDBA
+#
+#- name: add repo
+#  apt_repository: repo='deb http://ubuntu-cloud.archive.canonical.com/{{ ansible_distribution | lower }} {{ ansible_distribution_release }}-updates/liberty main' state=present
+
+# - name: add apt-key
+#   shell:
+#   - /usr/bin/curl https://baltocdn.com/helm/signing.asc | sudo apt-key add -
+#   - /usr/bin/sudo apt-get install apt-transport-https --yes
+#
+# - name: add repo
+#   apt_repository: repo='deb https://baltocdn.com/helm/stable/debian/ all main' state=present
+#
+# - name: install helm3
+#   shell: sudo apt-get update; sudo apt-get install helm
+#
+
 - name: Retrieve helm bin
   unarchive:
     src: https://get.helm.sh/helm-v3.5.3-linux-amd64.tar.gz
@@ -751,23 +823,77 @@ ubuntu@master0:~/ansible$ cat roles/helm3_install/tasks/main.yml
   args:
     creates: /usr/local/bin/helm
 
-- name: Add Bitani chart repo
-  community.kubernetes.helm_repository:
-    name: bitami
-    repo_url: "https://charts.bitnami.com/bitnami"
+- name: Add a repository
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: stable
+    repo_url: https://charts.helm.sh/stable
+
+- name: Add Red Hat Helm charts repository
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: redhat-charts
+    repo_url: https://redhat-developer.github.com/redhat-helm-charts
 ```
 
 > Reference >
 https://github.com/geerlingguy/ansible-for-devops/blob/master/kubernetes/examples/helm.yml
 https://www.ansible.com/blog/automating-helm-using-ansible
 
-#### Ingress
+#### `sealedSecrets` by `kubeseal`
+
+- Install `kubernetes.core` module, equivalent to `community.kubernetes`
 
 ```sh
-- name: Add stable chart repo
-  community.kubernetes.helm_repository:
-    name: stable
+ansible-galaxy collection install kubernetes.core
+```
+
+- Ansible code
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/kubeseal/tasks/main.yml
+---
+# tasks file for kubeseal
+
+- name: Add helm repo
+  become: yes
+  become_user: ubuntu
+  vars:
+    chart_repo_url: "https://bitnami-labs.github.io/sealed-secrets"
+  kubernetes.core.helm_repository:
+    name: bitnami
+    repo_url: "{{ chart_repo_url }}"
+```
+
+> Reference > https://github.com/bitnami-labs/sealed-secrets
+
+
+#### `ingress-nginx` - `role: k8s_ingress_nginx`
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_ingress_nginx/tasks/main.yml
+---
+# tasks file for k8s_ingress_nginx
+
+- name: Add ingress-nginx chart repo
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: ingress-nginx
     repo_url: "https://kubernetes.github.io/ingress-nginx"
+
+- name: Deploy latest version of ingress-nginx
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm:
+    name: ingress-nginx
+    chart_ref: ingress-nginx/ingress-nginx
+    release_namespace: ingress-nginx
+    create_namespace: yes
+    values:
+      replicas: 1
 ```
 
 #### Prometheus

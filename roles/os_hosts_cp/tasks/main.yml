@@ -1,0 +1,10 @@
+---
+# tasks file for os_mod_hosts
+- name: Insert multiple lines and Backup
+  blockinfile:
+    path: /etc/hosts
+    backup: yes
+    block: |
+      10.39.64.10	master0
+      10.39.64.20	worker0
+      10.39.64.21	worker1

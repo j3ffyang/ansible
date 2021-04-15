@@ -1,0 +1,8 @@
+---
+# tasks file for prometheus
+- name: Deploy latest version of Prometheus chart inside monitoring namespace (and create it)
+  community.kubernetes.helm:
+    name: prom
+    chart_ref: stable/prometheus
+    release_namespace: monitoring
+    create_namespace: true

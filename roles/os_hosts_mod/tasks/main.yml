@@ -1,0 +1,7 @@
+---
+# tasks file for os_hosts_mod
+
+- name: Copy hosts
+  template: 
+    src: hosts.j2
+    dest: /etc/hosts
