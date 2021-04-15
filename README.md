@@ -5,7 +5,7 @@
 
 - [Objective](#objective)
 - [Pre-requisite](#pre-requisite)
-- [Architecture Overview **](#architecture-overview)
+- [Architecture Overview](#architecture-overview)
 - [Deployment Workflow](#deployment-workflow)
   - [Prototype Environment](#prototype-environment)
   - [System Hardening](#system-hardening)
@@ -66,7 +66,9 @@
 - Need several block-disks for MongoDB and others
 - A DNS that can resolve service.domain.com, or a local `/etc/hosts` must be modified as well as `nginx-ingress` accordingly
 
-## Architecture Overview **
+## Architecture Overview
+
+The following figure is drawn by [PlantUML](https://plantuml.com). If you use VScode or Atom.io as markdown editor, you need a plugin `markdown-preview-enhanced`(https://shd101wyy.github.io/markdown-preview-enhanced) to view it.
 
 ```plantuml
 
