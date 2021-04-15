@@ -958,7 +958,7 @@ If there are 2 virtualIPs, bind them to both Nginx web server to maximize the ut
 
 cloud freeWorld
 
-rectangle "dnsQuery: pis.truedigital.com" as dns
+rectangle "dnsQuery: pis.malata.com" as dns
 
 rectangle "publicVIP: 159.138.238.56" as pubvip
 
