@@ -38,8 +38,8 @@
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
   - [Helm3](#helm3)
     - [Install `helm3` - `role: helm3_install` **](#install-helm3-role-helm3_install)
-    - [`sealedSecrets` by `kubeseal`](#sealedsecrets-by-kubeseal)
     - [`ingress-nginx` - `role: k8s_ingress_nginx`](#ingress-nginx-role-k8s_ingress_nginx)
+    - [`sealedSecrets` by `kubeseal`](#sealedsecrets-by-kubeseal)
     - [Prometheus](#prometheus)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
@@ -109,6 +109,7 @@ package kubernetes {
 freeWorld -- webServer
 webServer --> nginx_ingress
 ```
+
 
 ## Deployment Workflow
 
@@ -632,6 +633,8 @@ ubuntu@master0:~/ansible$ cat roles/k8s_init/tasks/main.yml
   command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10"  --node-name k8s-master --pod-network-cidr=10.10.0.0/16
 ```
 
+As long as `--pod-network-cidr=10.10.0.0/16` gets set, `cni0` device IP won't be able to change until otherwise `cni0` device is deleted.
+
 #### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`
 
 ```sh
@@ -704,16 +707,17 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 
 #### Destroy Entire Kubernetes Cluster
 
-Run the following on each of nodes
+Run the following on __each__ of nodes
 
 ```sh
 sudo kubeadm reset
 
-sudo apt purge kubectl kubeadm kubelet kubernetes-cni -y
-sudo apt autoremove
-
 sudo rm -fr /etc/cni/net.d
 rm -fr ~/.kube/
+
+# if you want to reinstall or install the very latest ones
+sudo apt purge kubectl kubeadm kubelet kubernetes-cni -y
+sudo apt autoremove
 
 # kubeadm reset should remove the following ones. But double check
 sudo rm -fr /etc/kubernetes/; sudo rm -fr /var/lib/etcd; sudo rm -rf /var/lib/cni/
@@ -883,6 +887,33 @@ ubuntu@master0:~/ansible$ cat roles/helm3_install/tasks/main.yml
 https://github.com/geerlingguy/ansible-for-devops/blob/master/kubernetes/examples/helm.yml
 https://www.ansible.com/blog/automating-helm-using-ansible
 
+
+#### `ingress-nginx` - `role: k8s_ingress_nginx`
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_ingress_nginx/tasks/main.yml
+---
+# tasks file for k8s_ingress_nginx
+
+- name: Add ingress-nginx chart repo
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: ingress-nginx
+    repo_url: "https://kubernetes.github.io/ingress-nginx"
+
+- name: Deploy latest version of ingress-nginx
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm:
+    name: ingress-nginx
+    chart_ref: ingress-nginx/ingress-nginx
+    release_namespace: ingress-nginx
+    create_namespace: yes
+    values:
+      replicas: 1
+```
+
 #### `sealedSecrets` by `kubeseal`
 
 - Install `kubernetes.core` module, equivalent to `community.kubernetes`
@@ -910,32 +941,6 @@ ubuntu@master0:~/ansible$ cat roles/kubeseal/tasks/main.yml
 
 > Reference > https://github.com/bitnami-labs/sealed-secrets
 
-
-#### `ingress-nginx` - `role: k8s_ingress_nginx`
-
-```sh
-ubuntu@master0:~/ansible$ cat roles/k8s_ingress_nginx/tasks/main.yml
----
-# tasks file for k8s_ingress_nginx
-
-- name: Add ingress-nginx chart repo
-  become: yes
-  become_user: ubuntu
-  kubernetes.core.helm_repository:
-    name: ingress-nginx
-    repo_url: "https://kubernetes.github.io/ingress-nginx"
-
-- name: Deploy latest version of ingress-nginx
-  become: yes
-  become_user: ubuntu
-  kubernetes.core.helm:
-    name: ingress-nginx
-    chart_ref: ingress-nginx/ingress-nginx
-    release_namespace: ingress-nginx
-    create_namespace: yes
-    values:
-      replicas: 1
-```
 
 #### Prometheus
 
