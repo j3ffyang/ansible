@@ -1,0 +1,20 @@
+---
+# tasks file for nginx-ingress
+
+- name: Add nginx-ingress chart repo
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: nginx-ingress
+    repo_url: "https://helm.nginx.com/stable"
+
+- name: Deploy latest version of ingress-nginx
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm:
+    name: nginx-ingress
+    chart_ref: nginx-stable/nginx-ingress
+    release_namespace: nginx-ingress
+    create_namespace: yes
+    values:
+      replicas: 1

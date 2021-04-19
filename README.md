@@ -22,11 +22,11 @@
     - [Install docker (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
     - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
-  - [Kubernetes (specific version)](#kubernetes-specific-version)
+  - [Kubernetes (specific version) - `1.18.18` **](#kubernetes-specific-version-11818)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
     - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
     - [Init the cluster on `master` only - `role: k8s_init`](#init-the-cluster-on-master-only-role-k8s_init)
-    - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_usr_grant)
+    - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_kubeconfig`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_kubeconfig)
     - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
     - [Create `kubeadm join` Command - `role: k8s_join_cmd`](#create-kubeadm-join-command-role-k8s_join_cmd)
     - [Join `master` in Kubernetes cluster - `role: k8s_join_node`](#join-master-in-kubernetes-cluster-role-k8s_join_node)
@@ -39,6 +39,7 @@
   - [Helm3](#helm3)
     - [Install `helm3` - `role: helm3_install` **](#install-helm3-role-helm3_install)
     - [`ingress-nginx` - `role: k8s_ingress_nginx`](#ingress-nginx-role-k8s_ingress_nginx)
+    - [~~`nginx_ingress` - `role: nginx_ingress`~~](#~~nginx_ingress-role-nginx_ingress~~)
     - [`sealedSecrets` by `kubeseal`](#sealedsecrets-by-kubeseal)
     - [Prometheus](#prometheus)
     - [Components on Kubernetes](#components-on-kubernetes)
@@ -340,18 +341,24 @@ ubuntu@master0:~/ansible$ cat main.yaml
     # - { role: os_hosts_cp, when: "inventory_hostname in groups['worker']" }
     # - { role: os_hostname_set, when: "inventory_hostname in groups['worker']" }
     # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
+    #
     # - { role: docker_install, when: "inventory_hostname in groups['all']" }
     # - { role: os_usr_create, when: "inventory_hostname in groups['all']" }
+    #
     # - { role: os_swap_disable, when: "inventory_hostname in groups['all']" }
     # - { role: k8s_install, when: "inventory_hostname in groups['all']" }
     # - { role: k8s_init, when: "inventory_hostname in groups['master']" }
-    # - { role: k8s_usr_grant, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_kubeconfig, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_flannel, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_join_cmd, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
+    # - { role: k8s_autocompletion, when: "inventory_hostname in groups['controller']" }
+    #
     # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
-    - { role: prometheus, when: "inventory_hostname in groups['master']" }
-
+    - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
+    # - { role: nginx_ingress, when: "inventory_hostname in groups['master']" }
+    # - { role: prometheus, when: "inventory_hostname in groups['master']" }
+    # - { role: kubeseal, when: "inventory_hostname in groups['master']" }
 ```
 
 - Standard playbook execution command
@@ -554,7 +561,7 @@ This step is to prevent too many images from being downloaded over internet
 
 ---
 
-### Kubernetes (specific version)
+### Kubernetes (specific version) - `1.18.18` **
 
 #### Disable `swap` - `role: os_swap_disable`
 
@@ -602,17 +609,17 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
     update_cache: yes
   vars:
     packages:
-      - kubelet
-      - kubeadm
-      - kubectl
+      - kubelet=1.18.18-00
+      - kubeadm=1.18.18-00
+      - kubectl=1.18.18-00
 
-# - name: Configure node ip
-#   lineinfile:
-#     path: /etc/default/kubelet
-#     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
-#   vars:
-#     node_ip:
-#       - 10.39.64.10
+        # - name: Configure node ip
+        #   lineinfile:
+        #     path: /etc/default/kubelet
+        #     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+        #   vars:
+        #     node_ip:
+        #       - 10.39.64.10
 
 - name: Restart kubelet
   service:
@@ -620,6 +627,8 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
     daemon_reload: yes
     state: restarted
 ```
+
+> Reference > https://www.digitalocean.com/community/tutorials/how-to-create-a-kubernetes-cluster-using-kubeadm-on-ubuntu-18-04
 
 #### Init the cluster on `master` only - `role: k8s_init`
 
@@ -630,28 +639,45 @@ ubuntu@master0:~/ansible$ cat roles/k8s_init/tasks/main.yml
 ---
 # tasks file for k8s_init
 - name: Initialize the Kubernetes cluster using kubeadm
-  command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10"  --node-name k8s-master --pod-network-cidr=10.10.0.0/16
+  command: kubeadm init --apiserver-advertise-address="10.39.64.10" --apiserver-cert-extra-sans="10.39.64.10" --node-name k8s-master --pod-network-cidr=10.244.0.0/16
 ```
 
-As long as `--pod-network-cidr=10.10.0.0/16` gets set, `cni0` device IP won't be able to change until otherwise `cni0` device is deleted.
+As long as `--pod-network-cidr=10.244.0.0/16` gets set, `cni0` device IP won't be able to change until otherwise `cni0` device is deleted.
 
-#### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_usr_grant`
+#### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_kubeconfig`
 
 ```sh
-ubuntu@master0:~/ansible$ cat roles/k8s_usr_grant/tasks/main.yml
+ubuntu@master0:~/ansible$ cat roles/k8s_kubeconfig/tasks/main.yml
 ---
-# tasks file for k8s_usr_grant
-- name: Setup kubeconfig for ubuntu user
-  command: "{{ item }}"
-  with_items:
-   - mkdir -p /home/ubuntu/.kube
-   - cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
-   - chown -R ubuntu:ubuntu /home/ubuntu/.kube
+# tasks file for k8s_kubeconfig
+# - name: Setup kubeconfig for ubuntu user
+#   command: "{{ item }}"
+#   with_items:
+#    - mkdir -p /home/ubuntu/.kube
+#    - cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config
+#    - chown -R ubuntu:ubuntu /home/ubuntu/.kube
+
+- name: create .kube directory
+  become: yes
+  become_user: ubuntu
+  file:
+    path: $HOME/.kube
+    state: directory
+    mode: 0755
+
+- name: copy admin.conf to user's kube config
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/ubuntu/.kube/config
+    remote_src: yes
+    owner: ubuntu
 ```
 
 You have to logout then login again to pick up the change!
 
 If `/home/ubuntu/.kube` isn't owned by `ubuntu.ubuntu`, but owned by `root.root` instead, the following error would appear
+
+> Reference > https://www.digitalocean.com/community/tutorials/how-to-create-a-kubernetes-cluster-using-kubeadm-on-ubuntu-18-04
 
 ```sh
 ubuntu@master0:~/.kube$ kubectl get all --all-namespaces
@@ -760,9 +786,7 @@ The reset process does not clean your kubeconfig files and you must remove them 
 Please, check the contents of the $HOME/.kube/config file.
 ```
 
-**Check whether `cni0` device exists and you may want to restart `network` and remove `cni0` devicem, if `cni0` IP address has changed.**
-
-**Move or remove `~/.kube` where `config` locates**
+**Remove both `cni0` and `flannel.1` devices by restarting VM**
 
 Consult with this reference, if you want to remove `docker` as well
 
@@ -783,6 +807,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_autocompletion/tasks/main.yml
     block: |
       source <(kubectl completion bash)
       source <(kubeadm completion bash)
+      source <(helm completion bash)
       alias k=kubectl
       complete -F __start_kubectl k
     backup: yes
@@ -874,19 +899,11 @@ ubuntu@master0:~/ansible$ cat roles/helm3_install/tasks/main.yml
   kubernetes.core.helm_repository:
     name: stable
     repo_url: https://charts.helm.sh/stable
-
-- name: Add Red Hat Helm charts repository
-  become: yes
-  become_user: ubuntu
-  kubernetes.core.helm_repository:
-    name: redhat-charts
-    repo_url: https://redhat-developer.github.com/redhat-helm-charts
 ```
 
 > Reference >
 https://github.com/geerlingguy/ansible-for-devops/blob/master/kubernetes/examples/helm.yml
 https://www.ansible.com/blog/automating-helm-using-ansible
-
 
 #### `ingress-nginx` - `role: k8s_ingress_nginx`
 
@@ -909,6 +926,34 @@ ubuntu@master0:~/ansible$ cat roles/k8s_ingress_nginx/tasks/main.yml
     name: ingress-nginx
     chart_ref: ingress-nginx/ingress-nginx
     release_namespace: ingress-nginx
+    create_namespace: yes
+    values:
+      replicas: 1
+```
+
+#### ~~`nginx_ingress` - `role: nginx_ingress`~~
+
+This project has been deprecated and replaced with https://kubernetes.github.io/ingress-nginx/
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/nginx_ingress/tasks/main.yml
+---
+# tasks file for nginx-ingress
+
+- name: Add nginx-ingress chart repo
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: nginx-ingress
+    repo_url: "https://helm.nginx.com/stable"
+
+- name: Deploy latest version of ingress-nginx
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm:
+    name: nginx-ingress
+    chart_ref: nginx-stable/nginx-ingress
+    release_namespace: nginx-ingress
     create_namespace: yes
     values:
       replicas: 1
