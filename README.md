@@ -42,6 +42,7 @@
     - [~~`nginx_ingress` - `role: nginx_ingress`~~](#~~nginx_ingress-role-nginx_ingress~~)
     - [`sealedSecrets` by `kubeseal`](#sealedsecrets-by-kubeseal)
     - [Prometheus](#prometheus)
+    - [`cert-manager`](#cert-manager)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
@@ -1001,6 +1002,8 @@ ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
     release_namespace: monitoring
     create_namespace: true
 ```
+
+#### `cert-manager`
 
 #### Components on Kubernetes
 - `prometheus` for monitoring
