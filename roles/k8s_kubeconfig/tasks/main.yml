@@ -21,3 +21,4 @@
     dest: /home/ubuntu/.kube/config
     remote_src: yes
     owner: ubuntu
+    mode: 0600

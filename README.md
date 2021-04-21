@@ -671,6 +671,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_kubeconfig/tasks/main.yml
     dest: /home/ubuntu/.kube/config
     remote_src: yes
     owner: ubuntu
+    mode: 0600
 ```
 
 You have to logout then login again to pick up the change!
