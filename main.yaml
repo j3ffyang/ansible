@@ -21,8 +21,7 @@
     # - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
     # - { role: k8s_autocompletion, when: "inventory_hostname in groups['controller']" }
     #
-    # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
+    - { role: helm3_install, when: "inventory_hostname in groups['master']" }
     - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
-    # - { role: nginx_ingress, when: "inventory_hostname in groups['master']" }
     # - { role: prometheus, when: "inventory_hostname in groups['master']" }
     # - { role: kubeseal, when: "inventory_hostname in groups['master']" }

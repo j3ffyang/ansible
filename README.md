@@ -727,7 +727,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 - name: Copy the join command to server location
   copy: src=join-command dest=/tmp/join-command.sh mode=0777
 
-- name: Join the node to cluster
+- name: Join node to cluster
   command: sh /tmp/join-command.sh
 ```
 
