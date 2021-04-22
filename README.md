@@ -32,7 +32,7 @@
     - [Join `master` in Kubernetes cluster - `role: k8s_join_node`](#join-master-in-kubernetes-cluster-role-k8s_join_node)
     - [Destroy Entire Kubernetes Cluster](#destroy-entire-kubernetes-cluster)
     - [(Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`](#optional-autocomplete-and-alias-for-kubectl-and-kubeadm-role-k8s_autocompletion)
-    - [Create Custom persistentVolume?](#create-custom-persistentvolume)
+    - [Custom persistentVolume](#custom-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
@@ -330,7 +330,7 @@ ubuntu@master0:~/ansible/roles/os_pkg_rm$ tree
 
 - `main.yaml` - main playbook pattern
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat main.yaml
 - hosts: all
   become: true
@@ -377,7 +377,7 @@ ansible-playbook --extra-vars @global.yaml main.yaml
 
 #### Delete Unused Packages - `role: os_pkg_rm`
 
-  ```sh
+  ```yml
   cat roles/os_pkg_rm/tasks/main.yml
 
   ---
@@ -428,7 +428,7 @@ ansible_python_interpreter=/usr/bin/python3
 
 - `templates` in `jinja2` format
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/templates/hosts.j2
 
 {% for item in groups["all"] %}
@@ -457,7 +457,7 @@ ubuntu@master0:~/ansible$ cat roles/os_hosts_mod/tasks/main.yml
 
 According to `/etc/hosts` on `control node`
 
-  ```sh
+  ```yml
   ubuntu@master0:~/ansible$ cat roles/os_hostname_set/tasks/main.yml
   ---
   # tasks file for os_hostname_set
@@ -479,7 +479,7 @@ According to `/etc/hosts` on `control node`
   ```
 
 
-  ```sh
+  ```yml
   ubuntu@master0:~/ansible$ cat roles/os_usr_create/tasks/main.yml
   ---
   # tasks file for os_usr_create
@@ -510,7 +510,7 @@ This action has been done before setting up Ansible as pre-requisite, unless oth
 ### Docker
 #### Install docker (containerd.io) - `role: docker_install`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 ---
 # tasks file for docker_install
@@ -567,7 +567,7 @@ This step is to prevent too many images from being downloaded over internet
 
 #### Disable `swap` - `role: os_swap_disable`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/os_swap_disable/tasks/main.yml
 ---
 # tasks file for os_swap_disable
@@ -589,7 +589,7 @@ ubuntu@master0:~/ansible$ cat roles/os_swap_disable/tasks/main.yml
 
 #### Install Kubernetes - `role: k8s_install`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
 ---
 # tasks file for k8s_install
@@ -636,7 +636,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
 
 `--apiserver-advertise-address` is `master0` IP address
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_init/tasks/main.yml
 ---
 # tasks file for k8s_init
@@ -648,7 +648,7 @@ As long as `--pod-network-cidr=10.244.0.0/16` gets set, `cni0` device IP won't b
 
 #### Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_kubeconfig`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_kubeconfig/tasks/main.yml
 ---
 # tasks file for k8s_kubeconfig
@@ -696,7 +696,7 @@ I0412 08:14:37.739217   11404 request.go:668] Waited for 1.197000394s due to cli
 
 #### Install `flannel` Network Plugin (master only) - `role: k8s_flannel`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_flannel/tasks/main.yml
 ---
 # tasks file for k8s_flannel
@@ -709,7 +709,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_flannel/tasks/main.yml
 
 #### Create `kubeadm join` Command - `role: k8s_join_cmd`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_join_cmd/tasks/main.yml
 ---
 # tasks file for k8s_join_cmd
@@ -723,7 +723,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_cmd/tasks/main.yml
 
 #### Join `master` in Kubernetes cluster - `role: k8s_join_node`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 ---
 # tasks file for k8s_join_node
@@ -800,7 +800,7 @@ Consult with this reference, if you want to remove `docker` as well
 
 - Ansible code - run this on Ansible `controller` for `ubuntu` user only
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_autocompletion/tasks/main.yml
 ---
 # tasks file for k8s_autocompletion
@@ -829,14 +829,76 @@ alias k=kubectl
 complete -F __start_kubectl k
 ```
 
-#### Create Custom persistentVolume?
+#### Custom persistentVolume
 
-- `lsblk`
+**Caution**: This part of instruction contains block disk format. Make sure you understand what you're doing and what exact disk(s) you're going to format. You may destroy your existing installation if incorrect device is chosen
+
+The environment that I have when writing this document is
+
+vm | device | size
+-- | -- | --
+master0 | |
+worker0 | sda | 20g
+worker1 | sdb | 20g
+
+##### `lsblk` - `role: os_lsblk`
+```yml
+ubuntu@master0:~/ansible$ cat roles/os_lsblk/tasks/main.yml
+---
+# tasks file for os_lsblk
+- name: Run lsblk on all nodes
+  command: lsblk
+  register: cmd_reg
+- name: "lsblk stdout"
+  debug:
+    msg: "{{ cmd_reg.stdout.split('\n') }}"
+```
+
+Output:
+```yml
+TASK [os_lsblk : lsblk stdout] ***************************************************************************
+ok: [master0] => {
+    "msg": [
+        "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT",
+        "sda       8:0    0   128G  0 disk ",
+        "├─sda1    8:1    0 127.9G  0 part /",
+        "├─sda14   8:14   0     4M  0 part ",
+        "└─sda15   8:15   0   106M  0 part /boot/efi",
+        "sdb       8:16   0    16G  0 disk ",
+        "└─sdb1    8:17   0    16G  0 part ",
+        "sr0      11:0    1  1024M  0 rom  "
+    ]
+}
+ok: [worker0] => {
+    "msg": [
+        "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT",
+        "sda       8:0    0    20G  0 disk ",
+        "sdb       8:16   0   128G  0 disk ",
+        "├─sdb1    8:17   0 127.9G  0 part /",
+        "├─sdb14   8:30   0     4M  0 part ",
+        "└─sdb15   8:31   0   106M  0 part /boot/efi",
+        "sr0      11:0    1  1024M  0 rom  "
+    ]
+}
+ok: [worker1] => {
+    "msg": [
+        "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT",
+        "sda       8:0    0   128G  0 disk ",
+        "├─sda1    8:1    0 127.9G  0 part /",
+        "├─sda14   8:14   0     4M  0 part ",
+        "└─sda15   8:15   0   106M  0 part /boot/efi",
+        "sdb       8:16   0    20G  0 disk ",
+        "sr0      11:0    1  1024M  0 rom  "
+    ]
+}
+```
+
 - `fdisk` > `n` to create partition > `w` to write configuration
 - `mkfs.xfs` for `mongoDB` and `mkfs.ext4` for others
 - `mount` to `/mnt/disks-by-id/diskX`
 - Update `/etc/fstab`
 - `storageClass`
+
 
 #### Kubernetes upgrade for an existing cluster
 
@@ -861,7 +923,7 @@ ansible-galaxy collection install community.kubernetes
 
 Notice that we want to use `ubuntu` user to control `helm`, there are `become` and `become_user` privilege escalation defined, as `~/ansible/main.yaml` has a global `become: true` as `root`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/helm3_install/tasks/main.yml
 
 ---
@@ -910,7 +972,7 @@ https://www.ansible.com/blog/automating-helm-using-ansible
 
 #### `ingress-nginx` - `role: k8s_ingress_nginx`
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_ingress_nginx/tasks/main.yml
 ---
 # tasks file for k8s_ingress_nginx
@@ -938,7 +1000,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_ingress_nginx/tasks/main.yml
 
 This project has been deprecated and replaced with https://kubernetes.github.io/ingress-nginx/
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/nginx_ingress/tasks/main.yml
 ---
 # tasks file for nginx-ingress
@@ -966,7 +1028,7 @@ ubuntu@master0:~/ansible$ cat roles/nginx_ingress/tasks/main.yml
 
 Install with `crd` enabled
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/cert-manager/tasks/main.yml
 ---
 # tasks file for cert-manager
@@ -991,6 +1053,56 @@ ubuntu@master0:~/ansible$ cat roles/cert-manager/tasks/main.yml
 
 > Reference > https://cert-manager.io/docs/installation/kubernetes/
 
+To test and verify the installation,
+- Create an `issuer`
+
+```yml
+cat <<EOF > test-resources.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager-test
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: test-selfsigned
+  namespace: cert-manager-test
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: selfsigned-cert
+  namespace: cert-manager-test
+spec:
+  dnsNames:
+    - example.com
+  secretName: selfsigned-cert-tls
+  issuerRef:
+    name: test-selfsigned
+EOF
+```
+
+- Create the test resource
+
+```sh
+kubectl apply -f test-resources.yaml
+```
+
+- Check the `certificate` created
+
+```sh
+kubectl describe certificate -n cert-manager-test
+```
+
+- Clean up
+
+```sh
+kubectl delete -f test-resources.yaml
+```
+
 #### `sealedSecrets` by `kubeseal`
 
 - Install `kubernetes.core` module, equivalent to `community.kubernetes`
@@ -1001,7 +1113,7 @@ ansible-galaxy collection install kubernetes.core
 
 - Ansible code
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/kubeseal/tasks/main.yml
 ---
 # tasks file for kubeseal
@@ -1021,7 +1133,7 @@ ubuntu@master0:~/ansible$ cat roles/kubeseal/tasks/main.yml
 
 #### Prometheus
 
-```sh
+```yml
 ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
 ---
 # tasks file for prometheus
@@ -1050,7 +1162,7 @@ ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
 
 - Copy a file
 
-  ```sh
+  ```yml
   cat roles/os_hosts_cp/tasks/main.yml
   ---
   # tasks file for os_mod_hosts

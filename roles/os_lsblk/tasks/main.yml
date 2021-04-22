@@ -1,0 +1,8 @@
+---
+# tasks file for os_lsblk
+- name: Run lsblk on all nodes
+  command: lsblk
+  register: cmd_reg
+- name: "lsblk stdout"
+  debug:
+    msg: "{{ cmd_reg.stdout.split('\n') }}"

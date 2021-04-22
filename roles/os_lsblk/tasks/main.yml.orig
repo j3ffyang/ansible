@@ -1,0 +1,8 @@
+---
+# tasks file for os_lsblk
+- name: Run lsblk on all nodes
+  ansible.builtin.shell: 
+    cmd: lsblk
+    register: cmd_reg
+  rescue:
+    - debug: var=cmd_reg

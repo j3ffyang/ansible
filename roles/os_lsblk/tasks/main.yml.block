@@ -1,0 +1,9 @@
+---
+# tasks file for os_lsblk
+- block:
+  - name: Run lsblk on all nodes
+    shell: lsblk
+    register: cmd_reg
+  rescue:
+    - debug: var=cmd_reg
+
