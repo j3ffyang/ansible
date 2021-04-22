@@ -40,9 +40,9 @@
     - [Install `helm3` - `role: helm3_install` **](#install-helm3-role-helm3_install)
     - [`ingress-nginx` - `role: k8s_ingress_nginx`](#ingress-nginx-role-k8s_ingress_nginx)
     - [~~`nginx_ingress` - `role: nginx_ingress`~~](#~~nginx_ingress-role-nginx_ingress~~)
+    - [`cert-manager` - `role: cert-manager`](#cert-manager-role-cert-manager)
     - [`sealedSecrets` by `kubeseal`](#sealedsecrets-by-kubeseal)
     - [Prometheus](#prometheus)
-    - [`cert-manager`](#cert-manager)
     - [Components on Kubernetes](#components-on-kubernetes)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
@@ -356,10 +356,11 @@ ubuntu@master0:~/ansible$ cat main.yaml
     # - { role: k8s_autocompletion, when: "inventory_hostname in groups['controller']" }
     #
     # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
-    - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
-    # - { role: nginx_ingress, when: "inventory_hostname in groups['master']" }
+    # - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
+    - { role: cert-manager, when: "inventory_hostname in groups['master']" }
     # - { role: prometheus, when: "inventory_hostname in groups['master']" }
     # - { role: kubeseal, when: "inventory_hostname in groups['master']" }
+ubuntu@master0:~/ansible$
 ```
 
 - Standard playbook execution command
@@ -961,6 +962,35 @@ ubuntu@master0:~/ansible$ cat roles/nginx_ingress/tasks/main.yml
       replicas: 1
 ```
 
+#### `cert-manager` - `role: cert-manager`
+
+Install with `crd` enabled
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/cert-manager/tasks/main.yml
+---
+# tasks file for cert-manager
+- name: Add cert-manager chart repo
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: jetstack
+    repo_url: "https://charts.jetstack.io"
+
+- name: Deploy latest version of cert-manager
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm:
+    name: cert-manager
+    chart_ref: jetstack/cert-manager
+    release_namespace: cert-manager
+    create_namespace: yes
+    release_values:
+      installCRDs: true
+```
+
+> Reference > https://cert-manager.io/docs/installation/kubernetes/
+
 #### `sealedSecrets` by `kubeseal`
 
 - Install `kubernetes.core` module, equivalent to `community.kubernetes`
@@ -1002,8 +1032,6 @@ ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
     release_namespace: monitoring
     create_namespace: true
 ```
-
-#### `cert-manager`
 
 #### Components on Kubernetes
 - `prometheus` for monitoring
