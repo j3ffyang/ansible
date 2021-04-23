@@ -1,3 +1,9 @@
 uusername: mark
 vaulted_passwd: zaq12wsx
-k8s_version: 1.18.17-00
+
+k8s_version: 1.18.18-00
+k8s_packages:
+        - kubelet
+        - kubeadm
+        - kubectl
+

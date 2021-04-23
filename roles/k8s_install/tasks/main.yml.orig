@@ -13,10 +13,22 @@
 
 - name: Install Kubernetes binaries
   apt: 
-    name: "{{ item }}={{ k8s_version }}"
+    name: "{{ packages }}"
     state: present
     update_cache: yes
-  with_items: "{{ k8s_packages }}"
+  vars:
+    packages:
+      - kubelet=1.18.18-00
+      - kubeadm=1.18.18-00
+      - kubectl=1.18.18-00
+
+        # - name: Configure node ip
+        #   lineinfile:
+        #     path: /etc/default/kubelet
+        #     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
+        #   vars:
+        #     node_ip:
+        #       - 10.39.64.10
 
 - name: Restart kubelet
   service:

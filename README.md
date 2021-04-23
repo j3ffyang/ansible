@@ -22,9 +22,9 @@
     - [Install docker (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
     - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
     - [Private Docker Registry (optional)](#private-docker-registry-optional)
-  - [Kubernetes (specific version) - `1.18.18` **](#kubernetes-specific-version-11818)
+  - [Kubernetes (specific version) - `1.18.18`](#kubernetes-specific-version-11818)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
-    - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
+    - [Install Kubernetes - `role: k8s_install` **](#install-kubernetes-role-k8s_install)
     - [Init the cluster on `master` only - `role: k8s_init`](#init-the-cluster-on-master-only-role-k8s_init)
     - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_kubeconfig`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_kubeconfig)
     - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
@@ -37,7 +37,7 @@
     - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
   - [Helm3](#helm3)
-    - [Install `helm3` - `role: helm3_install` **](#install-helm3-role-helm3_install)
+    - [Install `helm3` - `role: helm3_install`](#install-helm3-role-helm3_install)
     - [`ingress-nginx` - `role: k8s_ingress_nginx`](#ingress-nginx-role-k8s_ingress_nginx)
     - [~~`nginx_ingress` - `role: nginx_ingress`~~](#~~nginx_ingress-role-nginx_ingress~~)
     - [`cert-manager` - `role: cert-manager`](#cert-manager-role-cert-manager)
@@ -563,7 +563,7 @@ This step is to prevent too many images from being downloaded over internet
 
 ---
 
-### Kubernetes (specific version) - `1.18.18` **
+### Kubernetes (specific version) - `1.18.18`
 
 #### Disable `swap` - `role: os_swap_disable`
 
@@ -587,7 +587,62 @@ ubuntu@master0:~/ansible$ cat roles/os_swap_disable/tasks/main.yml
 
 > Reference > https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/
 
-#### Install Kubernetes - `role: k8s_install`
+#### Install Kubernetes - `role: k8s_install` **
+
+First set variable
+
+```yml
+ubuntu@master0:~/ansible$ cat global.yaml
+
+k8s_version: 1.18.18-00
+k8s_packages:
+        - kubelet
+        - kubeadm
+        - kubectl
+```
+
+Then both variable of `k8s_packages` and `k8s_version` are set `~/global.yaml` and `k8s_packages` is installed in a for-loop pattern.
+
+```yml
+ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
+---
+# tasks file for k8s_install
+- name: Add an apt signing key for Kubernetes
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Adding apt repository for Kubernetes
+  apt_repository:
+    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    state: present
+    filename: kubernetes.list
+
+- name: Install Kubernetes binaries
+  apt:
+    name: "{{ item }}={{ k8s_version }}"
+    state: present
+    update_cache: yes
+  with_items: "{{ k8s_packages }}"
+
+- name: Restart kubelet
+  service:
+    name: kubelet
+    daemon_reload: yes
+    state: restarted
+```
+
+You can do `dry-run` (`--check`) to test the result without committing
+
+```sh
+ansible-playbook --extra-vars @global.yaml main.yaml --check -v
+```
+
+---
+
+I leave the following code in an earlier release as a reference.
+
+You may change the version of installed binary
 
 ```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
@@ -893,6 +948,61 @@ ok: [worker1] => {
 }
 ```
 
+If running `ansible-playbook --extra-vars @global.yaml main.yaml -v | sed 's/\\n/\n/g'`, the output looks like
+
+```yml
+ubuntu@master0:~/ansible$ ansible-playbook --extra-vars @global.yaml main.yaml -v
+Using /home/ubuntu/ansible/ansible.cfg as config file
+
+PLAY [all] ***********************************************************************************************
+
+TASK [Gathering Facts] ***********************************************************************************
+ok: [master0]
+ok: [worker0]
+ok: [worker1]
+
+TASK [os_lsblk : Run lsblk on all nodes] *****************************************************************
+changed: [worker0] => {"changed": true, "cmd": ["lsblk"], "delta": "0:00:00.003796", "end": "2021-04-23 03:32:19.148881", "rc": 0, "start": "2021-04-23 03:32:19.145085", "stderr": "", "stderr_lines": [], "stdout": "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT\nsda       8:0    0    20G  0 disk \nsdb       8:16   0   128G  0 disk \n├─sdb1    8:17   0 127.9G  0 part /\n├─sdb14   8:30   0     4M  0 part \n└─sdb15   8:31   0   106M  0 part /boot/efi\nsr0      11:0    1  1024M  0 rom  ", "stdout_lines": ["NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT", "sda       8:0    0    20G  0 disk ", "sdb       8:16   0   128G  0 disk ", "├─sdb1    8:17   0 127.9G  0 part /", "├─sdb14   8:30   0     4M  0 part ", "└─sdb15   8:31   0   106M  0 part /boot/efi", "sr0      11:0    1  1024M  0 rom  "]}
+changed: [worker1] => {"changed": true, "cmd": ["lsblk"], "delta": "0:00:00.004000", "end": "2021-04-23 03:32:19.153084", "rc": 0, "start": "2021-04-23 03:32:19.149084", "stderr": "", "stderr_lines": [], "stdout": "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT\nsda       8:0    0   128G  0 disk \n├─sda1    8:1    0 127.9G  0 part /\n├─sda14   8:14   0     4M  0 part \n└─sda15   8:15   0   106M  0 part /boot/efi\nsdb       8:16   0    20G  0 disk \nsr0      11:0    1  1024M  0 rom  ", "stdout_lines": ["NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT", "sda       8:0    0   128G  0 disk ", "├─sda1    8:1    0 127.9G  0 part /", "├─sda14   8:14   0     4M  0 part ", "└─sda15   8:15   0   106M  0 part /boot/efi", "sdb       8:16   0    20G  0 disk ", "sr0      11:0    1  1024M  0 rom  "]}
+changed: [master0] => {"changed": true, "cmd": ["lsblk"], "delta": "0:00:00.005033", "end": "2021-04-23 03:32:19.218856", "rc": 0, "start": "2021-04-23 03:32:19.213823", "stderr": "", "stderr_lines": [], "stdout": "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT\nsda       8:0    0   128G  0 disk \n├─sda1    8:1    0 127.9G  0 part /\n├─sda14   8:14   0     4M  0 part \n└─sda15   8:15   0   106M  0 part /boot/efi\nsdb       8:16   0    16G  0 disk \n└─sdb1    8:17   0    16G  0 part \nsr0      11:0    1  1024M  0 rom  ", "stdout_lines": ["NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT", "sda       8:0    0   128G  0 disk ", "├─sda1    8:1    0 127.9G  0 part /", "├─sda14   8:14   0     4M  0 part ", "└─sda15   8:15   0   106M  0 part /boot/efi", "sdb       8:16   0    16G  0 disk ", "└─sdb1    8:17   0    16G  0 part ", "sr0      11:0    1  1024M  0 rom  "]}
+
+TASK [os_lsblk : lsblk stdout] ***************************************************************************
+ok: [master0] => {
+    "msg": [
+        "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT",
+        "sda       8:0    0   128G  0 disk ",
+        "├─sda1    8:1    0 127.9G  0 part /",
+        "├─sda14   8:14   0     4M  0 part ",
+        "└─sda15   8:15   0   106M  0 part /boot/efi",
+        "sdb       8:16   0    16G  0 disk ",
+        "└─sdb1    8:17   0    16G  0 part ",
+        "sr0      11:0    1  1024M  0 rom  "
+    ]
+}
+ok: [worker0] => {
+    "msg": [
+        "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT",
+        "sda       8:0    0    20G  0 disk ",
+        "sdb       8:16   0   128G  0 disk ",
+        "├─sdb1    8:17   0 127.9G  0 part /",
+        "├─sdb14   8:30   0     4M  0 part ",
+        "└─sdb15   8:31   0   106M  0 part /boot/efi",
+        "sr0      11:0    1  1024M  0 rom  "
+    ]
+}
+ok: [worker1] => {
+    "msg": [
+        "NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT",
+        "sda       8:0    0   128G  0 disk ",
+        "├─sda1    8:1    0 127.9G  0 part /",
+        "├─sda14   8:14   0     4M  0 part ",
+        "└─sda15   8:15   0   106M  0 part /boot/efi",
+        "sdb       8:16   0    20G  0 disk ",
+        "sr0      11:0    1  1024M  0 rom  "
+    ]
+}
+```
+
 - `fdisk` > `n` to create partition > `w` to write configuration
 - `mkfs.xfs` for `mongoDB` and `mkfs.ext4` for others
 - `mount` to `/mnt/disks-by-id/diskX`
@@ -910,7 +1020,7 @@ ok: [worker1] => {
 
 ### Helm3
 
-#### Install `helm3` - `role: helm3_install` **
+#### Install `helm3` - `role: helm3_install`
 
 Up to the date that I write this document, `helm` version = `v3.5.3`
 
@@ -1053,7 +1163,7 @@ ubuntu@master0:~/ansible$ cat roles/cert-manager/tasks/main.yml
 
 > Reference > https://cert-manager.io/docs/installation/kubernetes/
 
-To test and verify the installation,
+To test and verify the installation (this isn't included in code)
 - Create an `issuer`
 
 ```yml
@@ -1102,6 +1212,8 @@ kubectl describe certificate -n cert-manager-test
 ```sh
 kubectl delete -f test-resources.yaml
 ```
+
+> Reference > https://www.fosstechnix.com/kubernetes-nginx-ingress-controller-letsencrypt-cert-managertls/
 
 #### `sealedSecrets` by `kubeseal`
 
