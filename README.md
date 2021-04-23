@@ -632,7 +632,7 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
     state: restarted
 ```
 
-You can do `dry-run` (`--check`) to test the result without committing
+You can use `--check` as `dry-run` to test the result without committing
 
 ```sh
 ansible-playbook --extra-vars @global.yaml main.yaml --check -v
@@ -669,14 +669,6 @@ ubuntu@master0:~/ansible$ cat roles/k8s_install/tasks/main.yml
       - kubelet=1.18.18-00
       - kubeadm=1.18.18-00
       - kubectl=1.18.18-00
-
-        # - name: Configure node ip
-        #   lineinfile:
-        #     path: /etc/default/kubelet
-        #     line: KUBELET_EXTRA_ARGS=--node-ip={{ node_ip }}
-        #   vars:
-        #     node_ip:
-        #       - 10.39.64.10
 
 - name: Restart kubelet
   service:
@@ -897,6 +889,7 @@ worker0 | sda | 20g
 worker1 | sdb | 20g
 
 ##### `lsblk` - `role: os_lsblk`
+
 ```yml
 ubuntu@master0:~/ansible$ cat roles/os_lsblk/tasks/main.yml
 ---
