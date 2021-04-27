@@ -13,7 +13,7 @@
     # - { role: os_usr_create, when: "inventory_hostname in groups['all']" }
     #
     # - { role: os_swap_disable, when: "inventory_hostname in groups['all']" }
-    - { role: k8s_install, when: "inventory_hostname in groups['all']" }
+    # - { role: k8s_install, when: "inventory_hostname in groups['all']" }
     # - { role: k8s_init, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_kubeconfig, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_flannel, when: "inventory_hostname in groups['master']" }
@@ -28,4 +28,5 @@
     # - { role: prometheus, when: "inventory_hostname in groups['master']" }
     # - { role: kubeseal, when: "inventory_hostname in groups['master']" }
     #
+    - { role: nginx_server, when: "inventory_hostname in groups['webserver']" }
     # - { role: test, when: "inventory_hostname in groups['master']" }

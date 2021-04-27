@@ -8,5 +8,8 @@ master0 ansible_host=10.39.64.10
 [master]
 master0 ansible_host=10.39.64.10
 
+[webserver]
+webserver0 ansible_host=10.39.64.20
+
 [all:vars]
 ansible_python_interpreter=/usr/bin/python3

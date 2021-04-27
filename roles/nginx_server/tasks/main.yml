@@ -1,8 +1,9 @@
 ---
 # tasks file for nginx_server
 
-- name: Install Nginx Chart
-  kubernetes.core.helm:
-    name: nginx-server
-    namespace: testing
-    chart_ref: bitnami/nginx
+- name: Install the latest Nginx
+  apt: name=nginx state=latest
+- name: start nginx
+  service:
+    name: nginx
+    state: started
