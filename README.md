@@ -40,11 +40,10 @@
     - [Install `helm3` - `role: helm3_install`](#install-helm3-role-helm3_install)
     - [`ingress-nginx` - `role: k8s_ingress_nginx`](#ingress-nginx-role-k8s_ingress_nginx)
     - [~~`nginx_ingress` - `role: nginx_ingress`~~](#~~nginx_ingress-role-nginx_ingress~~)
-    - [`cert-manager` - `role: cert-manager`](#cert-manager-role-cert-manager)
-    - [`sealedSecrets` by `kubeseal`](#sealedsecrets-by-kubeseal)
-    - [Prometheus](#prometheus)
-    - [Components on Kubernetes](#components-on-kubernetes)
-    - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
+    - [`cert-manager` - `role: cert-manager` **](#cert-manager-role-cert-manager)
+    - [Prometheus - `role: prometheus` **](#prometheus-role-prometheus)
+    - [~~`sealedSecrets` by `kubeseal`~~](#~~sealedsecrets-by-kubeseal~~)
+    - [Upfront Nginx Web Server on VM(s) **](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
     - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
 - [Appendix](#appendix)
@@ -260,6 +259,13 @@ ubuntu@master0:~/ansible$ tree
   [controller]
   master0 ansible_host=10.39.64.10
 
+  [master]
+  master0 ansible_host=10.39.64.10
+
+  [webserver]
+  webserver0 ansible_host=10.39.64.20
+  webserver1 ansible_host=10.39.64.21
+
   [all:vars]
   ansible_python_interpreter=/usr/bin/python3
   ```
@@ -354,12 +360,16 @@ ubuntu@master0:~/ansible$ cat main.yaml
     # - { role: k8s_join_cmd, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
     # - { role: k8s_autocompletion, when: "inventory_hostname in groups['controller']" }
+    # - { role: os_lsblk, when: "inventory_hostname in groups['all']" }
     #
     # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
-    - { role: cert-manager, when: "inventory_hostname in groups['master']" }
-    # - { role: prometheus, when: "inventory_hostname in groups['master']" }
+    # - { role: cert-manager, when: "inventory_hostname in groups['master']" }
+    - { role: prometheus, when: "inventory_hostname in groups['master']" }
     # - { role: kubeseal, when: "inventory_hostname in groups['master']" }
+    #
+    # - { role: test, when: "inventory_hostname in groups['master']" }
+
 ubuntu@master0:~/ansible$
 ```
 
@@ -1099,6 +1109,12 @@ ubuntu@master0:~/ansible$ cat roles/k8s_ingress_nginx/tasks/main.yml
       replicas: 1
 ```
 
+Delete `ingress-nginx`
+
+```sh
+helm -n ingress-nginx uninstall ingress-nginx
+```
+
 #### ~~`nginx_ingress` - `role: nginx_ingress`~~
 
 This project has been deprecated and replaced with https://kubernetes.github.io/ingress-nginx/
@@ -1127,7 +1143,7 @@ ubuntu@master0:~/ansible$ cat roles/nginx_ingress/tasks/main.yml
       replicas: 1
 ```
 
-#### `cert-manager` - `role: cert-manager`
+#### `cert-manager` - `role: cert-manager` **
 
 Install with `crd` enabled
 
@@ -1155,6 +1171,13 @@ ubuntu@master0:~/ansible$ cat roles/cert-manager/tasks/main.yml
 ```
 
 > Reference > https://cert-manager.io/docs/installation/kubernetes/
+
+Delete `cert-manager`
+
+```sh
+helm -n monitoring uninstall cert-manager
+kubectl delete ns monitoring  # check whether there is no other resource in this namespace, before deleting
+```
 
 To test and verify the installation (this isn't included in code)
 - Create an `issuer`
@@ -1208,7 +1231,41 @@ kubectl delete -f test-resources.yaml
 
 > Reference > https://www.fosstechnix.com/kubernetes-nginx-ingress-controller-letsencrypt-cert-managertls/
 
-#### `sealedSecrets` by `kubeseal`
+#### Prometheus - `role: prometheus` **
+
+```yml
+ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
+---
+# tasks file for prometheus
+- name: Add prometheus chart repo
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm_repository:
+    name: prometheus-community
+    repo_url: "https://prometheus-community.github.io/helm-charts"
+
+- name: Deploy latest version of prometheus
+  become: yes
+  become_user: ubuntu
+  kubernetes.core.helm:
+    name: prometheus
+    chart_ref: prometheus-community/kube-prometheus-stack
+    release_namespace: monitoring
+    create_namespace: yes
+
+```
+
+> Reference > https://github.com/prometheus-community/helm-charts
+
+Delete `prometheus`
+
+```sh
+helm -n monitoring uninstall prometheus
+```
+
+#### ~~`sealedSecrets` by `kubeseal`~~
+
+I skip this one as VANTIQ deployment code would cover it
 
 - Install `kubernetes.core` module, equivalent to `community.kubernetes`
 
@@ -1236,31 +1293,56 @@ ubuntu@master0:~/ansible$ cat roles/kubeseal/tasks/main.yml
 > Reference > https://github.com/bitnami-labs/sealed-secrets
 
 
-#### Prometheus
+#### Upfront Nginx Web Server on VM(s) **
+
+Define `webserver` group in `inventory/hosts`
 
 ```yml
-ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
----
-# tasks file for prometheus
-- name: Deploy latest version of Prometheus chart inside monitoring namespace (and create it)
-  community.kubernetes.helm:
-    name: prom
-    chart_ref: stable/prometheus
-    release_namespace: monitoring
-    create_namespace: true
+ubuntu@master0:~/ansible$ cat inventory/hosts
+[worker]
+worker0	ansible_host=10.39.64.20
+worker1 ansible_host=10.39.64.21
+
+[controller]
+master0 ansible_host=10.39.64.10
+
+[master]
+master0 ansible_host=10.39.64.10
+
+[webserver]
+webserver0 ansible_host=10.39.64.20
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
 ```
 
-#### Components on Kubernetes
-- `prometheus` for monitoring
-- `postgreSQL` for Keycloak
-- `cert-manager` for automated certificate issuing
+Install `nginx` on `webserver0`
 
-#### Upfront Nginx Web Server on VM(s)
-- HA. Refer to Full HA of Nginx in Appendix
+```yml
+---
+# tasks file for nginx_server
+
+- name: Install the latest Nginx
+  apt: name=nginx state=latest
+- name: start nginx
+  service:
+    name: nginx
+    state: started
+```
+
+Delete the installed `nginx` on VM
+
+```sh
+sudo apt purge nginx
+sudo rm -fr /etc/nginx
+```
+
 - LB
   - Get all `worker_node` from Kubernetes
   - Get `nodePort` from `service` in Kubernetes
   - Put the above into `/etc/nginx/nginx.conf` in upfront Nginx webServer(s)
+- Customized SSL
+- HA. Refer to Full HA of Nginx in Appendix
 - Perf tuning, caching
 
 #### Reference
