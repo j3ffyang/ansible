@@ -12,6 +12,7 @@
     - [`sshd`](#sshd)
     - [`firewalld`](#firewalld)
     - [Firewall Rules for `kubeadm`](#firewall-rules-for-kubeadm)
+    - [Create a Private Docker Registry (optional)](#create-a-private-docker-registry-optional)
   - [Ansible Env Setup](#ansible-env-setup)
   - [Operating System](#operating-system)
     - [Delete Unused Packages - `role: os_pkg_rm`](#delete-unused-packages-role-os_pkg_rm)
@@ -50,6 +51,10 @@
     - [Full HA of Nginx](#full-ha-of-nginx)
     - [Comparison between `terraform` and `ansible`](#comparison-between-terraform-and-ansible)
     - [Sample code](#sample-code)
+    - [Format Raw Disk](#format-raw-disk)
+    - [Global Variable](#global-variable)
+    - [Template in `j2`](#template-in-j2)
+    - [Task and Sub-Tasks](#task-and-sub-tasks)
 
 <!-- /code_chunk_output -->
 
@@ -191,8 +196,23 @@ Allow all traffic for `internal` network on `eth0` interface only
 - UDP: `12345` for wireGuard
 
 
+#### Create a Private Docker Registry (optional)
 
+Write up this solution for an airgap environment and use a private docker registry
 
+> Reference > https://docker.github.io/get-involved/docs/communityleaders/eventhandbooks/docker101/registry/
+
+```sh
+mkdir -p /home/ubuntu/registry
+
+docker run -d -p 5000:5000 --name registry \
+  -v /home/ubuntu/registry:/var/lib/registry \
+  --restart always registry:2
+```
+
+Push images into registry
+
+> Reference > https://windsock.io/automated-docker-image-builds-with-multiple-tags/
 
 ### Ansible Env Setup
 
@@ -1316,9 +1336,10 @@ webserver0 ansible_host=10.39.64.20
 ansible_python_interpreter=/usr/bin/python3
 ```
 
-Install `nginx` on `webserver0`
+Install `nginx` on VMs in `webserver` group
 
 ```yml
+ubuntu@master0:~/ansible$ cat roles/nginx_server/tasks/main.yml
 ---
 # tasks file for nginx_server
 
@@ -1333,8 +1354,7 @@ Install `nginx` on `webserver0`
 Delete the installed `nginx` on VM
 
 ```sh
-sudo apt purge nginx
-sudo rm -fr /etc/nginx
+sudo apt-get --purge remove nginx-*
 ```
 
 - LB
@@ -1479,4 +1499,134 @@ tmpfs           5.0M     0  5.0M   0% /run/lock
 tmpfs           3.9G     0  3.9G   0% /sys/fs/cgroup
 /dev/sda15      105M  6.1M   99M   6% /boot/efi
 tmpfs           797M     0  797M   0% /run/user/0
+```
+
+#### Format Raw Disk
+```yml
+- name: check data directory
+  stat:
+    path: /mnt/tidb
+  register: data_dir_info
+
+- block:
+  - name: create vg
+    shell: "vgcreate tidb /dev/{{ block_device }}"
+  - name: create lv
+    shell: "lvcreate -l 100%VG tidb -n data"
+  - name: format lvs
+    shell: mkfs.xfs /dev/tidb/data
+  - name: create tidb dir
+    file:
+      path: /mnt/tidb
+      state: directory
+  - name: mount tidb
+    mount:
+      src: /dev/mapper/tidb-data
+      path: /mnt/tidb
+      state: mounted
+      fstype: xfs
+      boot: True
+  - name: create pd dir
+    file:
+      path: /mnt/tidb/pd
+      state: directory
+  - name: create tikv dir
+    file:
+      path: /mnt/tidb/tikv
+      state: directory
+  when: data_dir_info.stat.exists == False or (data_dir_info.stat.exists == True and data_dir_info.stat.isdir == False)
+~                            
+```
+
+#### Global Variable
+
+where to set local private docker registry
+
+```yml
+task_id: 1
+
+keepalived:
+  id: 249
+  vip: 3.1.5.249
+
+kubernetes:
+  version: v1.17.3
+  repository: docker.repo.local:5000
+
+nfs:
+  server: ""
+  path: ""
+
+tidb:
+  root_password: secret
+  node_port: 14000
+
+ntp:
+  server:
+  - ntp.ntsc.ac.cn
+  - ntp1.aliyun.com
+  - 210.72.145.44
+
+kafka:
+  ip: "{{ keepalived.vip }}"
+  node_port: 19092
+
+aiops:
+  database: aiops_dev
+```
+
+#### Template in `j2`
+
+```yml
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "insecure-registries": ["{{ kubernetes.repository }}"]
+}
+```
+
+#### Task and Sub-Tasks
+
+```yml
+- name: install k8s components on debian
+  include_tasks: debian.yaml
+  when: ansible_distribution_file_variety == "Debian"
+
+- name: install k8s components on redhat
+  include_tasks: redhat.yaml
+  when: ansible_distribution_file_variety == "RedHat"
+
+- name: config docker
+  template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+
+- name: enable kubelt
+  service:
+    name: kubelet
+    enabled: True
+
+- name: enable docker
+  service:
+    name: docker
+    state: started
+    enabled: True
+
+- name: install helm
+  copy:
+    src: helm
+    dest: /usr/sbin/
+    mode: 0777
+  when: inventory_hostname in groups["master"]
+
+- name: setup k8s cluster
+  include_tasks: setup_k8s.yaml
+
+- name: init k8s
+  include_tasks: init_k8s.yaml
+  when: inventory_hostname in groups["master"]
 ```
