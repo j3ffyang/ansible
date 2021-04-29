@@ -1,7 +1,7 @@
 ---
 # tasks file for docker_install
 
-- name: Install apt packages
+- name: Install docker packages
   apt:
     update_cache: yes
     name:
@@ -27,7 +27,6 @@
     update_cache: yes
     name: "{{ packages }}"
     state: present
-    update _cache: yes
   vars:
     packages:
     - docker-ce

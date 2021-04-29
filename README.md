@@ -12,8 +12,11 @@
     - [`sshd`](#sshd)
     - [`firewalld`](#firewalld)
     - [Firewall Rules for `kubeadm`](#firewall-rules-for-kubeadm)
-    - [Create a Private Docker Registry (optional)](#create-a-private-docker-registry-optional)
   - [Ansible Env Setup](#ansible-env-setup)
+  - [Air-Gapped Installation (optional) **](#air-gapped-installation-optional)
+    - [Build a Private Docker Registry](#build-a-private-docker-registry)
+    - [Tag Pulled Docker Images then Upload into Local Registry](#tag-pulled-docker-images-then-upload-into-local-registry)
+    - [Docker Points to Local Private Registry (with Ansible)](#docker-points-to-local-private-registry-with-ansible)
   - [Operating System](#operating-system)
     - [Delete Unused Packages - `role: os_pkg_rm`](#delete-unused-packages-role-os_pkg_rm)
     - [Set `/etc/hosts` - `role: os_hosts_mod`](#set-etchosts-role-os_hosts_mod)
@@ -22,10 +25,9 @@
   - [Docker](#docker)
     - [Install docker (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
     - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
-    - [Private Docker Registry (optional)](#private-docker-registry-optional)
   - [Kubernetes (specific version) - `1.18.18`](#kubernetes-specific-version-11818)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
-    - [Install Kubernetes - `role: k8s_install` **](#install-kubernetes-role-k8s_install)
+    - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
     - [Init the cluster on `master` only - `role: k8s_init`](#init-the-cluster-on-master-only-role-k8s_init)
     - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_kubeconfig`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_kubeconfig)
     - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
@@ -41,10 +43,10 @@
     - [Install `helm3` - `role: helm3_install`](#install-helm3-role-helm3_install)
     - [`ingress-nginx` - `role: k8s_ingress_nginx`](#ingress-nginx-role-k8s_ingress_nginx)
     - [~~`nginx_ingress` - `role: nginx_ingress`~~](#~~nginx_ingress-role-nginx_ingress~~)
-    - [`cert-manager` - `role: cert-manager` **](#cert-manager-role-cert-manager)
-    - [Prometheus - `role: prometheus` **](#prometheus-role-prometheus)
+    - [`cert-manager` - `role: cert-manager`](#cert-manager-role-cert-manager)
+    - [Prometheus - `role: prometheus`](#prometheus-role-prometheus)
     - [~~`sealedSecrets` by `kubeseal`~~](#~~sealedsecrets-by-kubeseal~~)
-    - [Upfront Nginx Web Server on VM(s) **](#upfront-nginx-web-server-on-vms)
+    - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
     - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
 - [Appendix](#appendix)
@@ -195,24 +197,6 @@ Allow all traffic for `internal` network on `eth0` interface only
 - TCP: `80`, `443`, `22`
 - UDP: `12345` for wireGuard
 
-
-#### Create a Private Docker Registry (optional)
-
-Write up this solution for an airgap environment and use a private docker registry
-
-> Reference > https://docker.github.io/get-involved/docs/communityleaders/eventhandbooks/docker101/registry/
-
-```sh
-mkdir -p /home/ubuntu/registry
-
-docker run -d -p 5000:5000 --name registry \
-  -v /home/ubuntu/registry:/var/lib/registry \
-  --restart always registry:2
-```
-
-Push images into registry
-
-> Reference > https://windsock.io/automated-docker-image-builds-with-multiple-tags/
 
 ### Ansible Env Setup
 
@@ -403,6 +387,36 @@ ansible-playbook --extra-vars @global.yaml main.yaml
 
 > Will explain `global.yaml` later in this document
 
+---
+
+### Air-Gapped Installation (optional) **
+
+Write up this solution for an airgapped environment and use a private docker registry
+
+#### Build a Private Docker Registry
+
+You need to pull `registry` image ahead of time
+
+> Reference > https://docker.github.io/get-involved/docs/communityleaders/eventhandbooks/docker101/registry/
+
+```sh
+mkdir -p /home/ubuntu/registry
+
+docker run -d -p 5000:5000 --name registry \
+  -v /home/ubuntu/registry:/var/lib/registry \
+  --restart always registry:2
+```
+
+> Reference > https://windsock.io/automated-docker-image-builds-with-multiple-tags/
+
+#### Tag Pulled Docker Images then Upload into Local Registry
+
+
+
+#### Docker Points to Local Private Registry (with Ansible)
+
+---
+
 ### Operating System
 
 #### Delete Unused Packages - `role: os_pkg_rm`
@@ -545,7 +559,7 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 ---
 # tasks file for docker_install
 
-- name: Install apt packages
+- name: Install docker packages
   apt:
     update_cache: yes
     name:
@@ -571,7 +585,6 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
     update_cache: yes
     name: "{{ packages }}"
     state: present
-    update _cache: yes
   vars:
     packages:
     - docker-ce
@@ -586,10 +599,6 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 - https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/ # updated 20210405 for `containerd`
 
 #### Point to `quay.io` for docker image, instead of `dockerhub.com`
-
-#### Private Docker Registry (optional)
-
-This step is to prevent too many images from being downloaded over internet
 
 ---
 
@@ -617,7 +626,7 @@ ubuntu@master0:~/ansible$ cat roles/os_swap_disable/tasks/main.yml
 
 > Reference > https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/
 
-#### Install Kubernetes - `role: k8s_install` **
+#### Install Kubernetes - `role: k8s_install`
 
 First set variable
 
@@ -834,36 +843,22 @@ sudo systemctl daemon-reload
 # run this if firewalld and/ or ufw are running
 sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sudo iptables -X
 
-# remove all running docker containers
+# remove all running docker containers for Kubernetes
 docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
 ```
 
-Output of the above
+If you also want to all pulled docker image, do
+
+**Warning**: this would remove **ALL** images
 
 ```sh
-ubuntu@master0:~/ansible$ sudo kubeadm reset
-[reset] Reading configuration from the cluster...
-[reset] FYI: You can look at this config file with 'kubectl -n kube-system get cm kubeadm-config -o yaml'
-[reset] WARNING: Changes made to this host by 'kubeadm init' or 'kubeadm join' will be reverted.
-[reset] Are you sure you want to proceed? [y/N]: y
-[preflight] Running pre-flight checks
-[reset] Removing info for node "k8s-master" from the ConfigMap "kubeadm-config" in the "kube-system" Namespace
-[reset] Stopping the kubelet service
-[reset] Unmounting mounted directories in "/var/lib/kubelet"
-[reset] Deleting contents of config directories: [/etc/kubernetes/manifests /etc/kubernetes/pki]
-[reset] Deleting files: [/etc/kubernetes/admin.conf /etc/kubernetes/kubelet.conf /etc/kubernetes/bootstrap-kubelet.conf /etc/kubernetes/controller-manager.conf /etc/kubernetes/scheduler.conf]
-[reset] Deleting contents of stateful directories: [/var/lib/etcd /var/lib/kubelet /var/lib/dockershim /var/run/kubernetes /var/lib/cni]
+for i in `docker image ls | grep -v "IMAGE ID" | awk '{print $3}'`; do docker image rm $i; done
+```
 
-The reset process does not clean CNI configuration. To do so, you must remove /etc/cni/net.d
+In my case, I want to keep `registry` docker image, I run this instead
 
-The reset process does not reset or clean up iptables rules or IPVS tables.
-If you wish to reset iptables, you must do so manually by using the "iptables" command.
-
-If your cluster was setup to utilize IPVS, run ipvsadm --clear (or similar)
-to reset your system's IPVS tables.
-
-The reset process does not clean your kubeconfig files and you must remove them manually.
-Please, check the contents of the $HOME/.kube/config file.
+```sh
+for i in `docker image ls | grep -E -v 'IMAGE ID|registry' | awk '{print $3}'`; do docker image rm $i; done
 ```
 
 **Remove both `cni0` and `flannel.1` devices by restarting VM**
@@ -1163,7 +1158,7 @@ ubuntu@master0:~/ansible$ cat roles/nginx_ingress/tasks/main.yml
       replicas: 1
 ```
 
-#### `cert-manager` - `role: cert-manager` **
+#### `cert-manager` - `role: cert-manager`
 
 Install with `crd` enabled
 
@@ -1251,7 +1246,7 @@ kubectl delete -f test-resources.yaml
 
 > Reference > https://www.fosstechnix.com/kubernetes-nginx-ingress-controller-letsencrypt-cert-managertls/
 
-#### Prometheus - `role: prometheus` **
+#### Prometheus - `role: prometheus`
 
 ```yml
 ubuntu@master0:~/ansible$ cat roles/prometheus/tasks/main.yml
@@ -1313,7 +1308,7 @@ ubuntu@master0:~/ansible$ cat roles/kubeseal/tasks/main.yml
 > Reference > https://github.com/bitnami-labs/sealed-secrets
 
 
-#### Upfront Nginx Web Server on VM(s) **
+#### Upfront Nginx Web Server on VM(s)
 
 Define `webserver` group in `inventory/hosts`
 

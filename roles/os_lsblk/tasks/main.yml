@@ -6,3 +6,12 @@
 - name: "lsblk stdout"
   debug:
     msg: "{{ cmd_reg.stdout.split('\n') }}"
+
+- name: Collect only facts about hardware
+  setup:
+    gather_subset:
+    - hardware
+
+- name: Output disks
+  debug:
+    var: hostvars[inventory_hostname].ansible_devices.keys() | map('regex_search', 'sd.*') | select('string') | list

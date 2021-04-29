@@ -1,1 +1,1 @@
-kubeadm join 10.39.64.10:6443 --token bwlpk7.hvl2xyadqivquqws     --discovery-token-ca-cert-hash sha256:f6c6ba7b5aa22016976d1105fb623d03dc42368ba1e3d16d0cda3af5a4107d4b 
+kubeadm join 10.39.64.10:6443 --token l04trb.zktatusatxx6qho1     --discovery-token-ca-cert-hash sha256:b8a5737b8c58282ab588043bd5748d9b72adc8fdeb7d90bd8e8dfa2c91da366c 
