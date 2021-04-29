@@ -1,7 +1,7 @@
 ---
 # tasks file for k8s_join_node
-- name: Copy the join command to server location
-  copy: src=join-command dest=/tmp/join-command.sh mode=0777
+- name: Copy the join command to other workers
+  copy: src=/tmp/join-command dest=/tmp/join-command.sh mode=0777
 
 - name: Join node to cluster
   command: sh /tmp/join-command.sh

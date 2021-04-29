@@ -32,7 +32,7 @@
     - [Grant Permission to `ubuntu` to Manage Kubernetes - `role: k8s_kubeconfig`](#grant-permission-to-ubuntu-to-manage-kubernetes-role-k8s_kubeconfig)
     - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
     - [Create `kubeadm join` Command - `role: k8s_join_cmd`](#create-kubeadm-join-command-role-k8s_join_cmd)
-    - [Join `master` in Kubernetes cluster - `role: k8s_join_node`](#join-master-in-kubernetes-cluster-role-k8s_join_node)
+    - [Join `node` in Kubernetes cluster - `role: k8s_join_node`](#join-node-in-kubernetes-cluster-role-k8s_join_node)
     - [Destroy Entire Kubernetes Cluster](#destroy-entire-kubernetes-cluster)
     - [(Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`](#optional-autocomplete-and-alias-for-kubectl-and-kubeadm-role-k8s_autocompletion)
     - [Custom persistentVolume](#custom-persistentvolume)
@@ -260,11 +260,16 @@ ubuntu@master0:~/ansible$ tree
   worker0	ansible_host=10.39.64.20
   worker1 ansible_host=10.39.64.21
 
-  [controller]
-  master0 ansible_host=10.39.64.10
-
   [master]
   master0 ansible_host=10.39.64.10
+
+  [controller]
+  master0
+
+  [k8s_node]
+  master0
+  worker0
+  worker1
 
   [webserver]
   webserver0 ansible_host=10.39.64.20
@@ -804,17 +809,17 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_cmd/tasks/main.yml
   register: join_command
 
 - name: Copy join command to local file
-  local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="./join-command"
+  local_action: copy content="{{ join_command.stdout_lines[0] }}" dest="/tmp/join-command"
 ```
 
-#### Join `master` in Kubernetes cluster - `role: k8s_join_node`
+#### Join `node` in Kubernetes cluster - `role: k8s_join_node`
 
 ```yml
 ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
 ---
 # tasks file for k8s_join_node
-- name: Copy the join command to server location
-  copy: src=join-command dest=/tmp/join-command.sh mode=0777
+- name: Copy the join command to other workers
+  copy: src=/tmp/join-command dest=/tmp/join-command.sh mode=0777
 
 - name: Join node to cluster
   command: sh /tmp/join-command.sh
@@ -827,15 +832,12 @@ Run the following on __each__ of nodes
 ```sh
 sudo kubeadm reset
 
-sudo rm -fr /etc/cni/net.d
-rm -fr ~/.kube/
-
-# if you want to reinstall or install the very latest ones
+# remove binaries
 sudo apt purge kubectl kubeadm kubelet kubernetes-cni -y
 sudo apt autoremove
 
 # kubeadm reset should remove the following ones. But double check
-sudo rm -fr /etc/kubernetes/; sudo rm -fr /var/lib/etcd; sudo rm -rf /var/lib/cni/
+sudo rm -fr /etc/kubernetes/; sudo rm -fr /var/lib/etcd; sudo rm -rf /var/lib/cni/; sudo rm -fr /etc/cni/net.d; rm -fr ~/.kube/
 
 # unnecessary in most cases
 sudo systemctl daemon-reload
@@ -847,7 +849,7 @@ sudo iptables -F && sudo iptables -t nat -F && sudo iptables -t mangle -F && sud
 docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
 ```
 
-If you also want to all pulled docker image, do
+If you also want to remove all pulled docker image, do
 
 **Warning**: this would remove **ALL** images
 

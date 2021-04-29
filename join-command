@@ -1,1 +1,0 @@
-kubeadm join 10.39.64.10:6443 --token l04trb.zktatusatxx6qho1     --discovery-token-ca-cert-hash sha256:b8a5737b8c58282ab588043bd5748d9b72adc8fdeb7d90bd8e8dfa2c91da366c 
