@@ -461,6 +461,9 @@ k8s.gcr.io/coredns 1.6.7 67da37a9a360
 k8s.gcr.io/etcd 3.4.3-0 303ce5db0e90
 ```
 
+- Tag images
+
+> Reference > https://stackoverflow.com/questions/35575674/how-to-save-all-docker-images-and-copy-to-another-machine
 
 
 #### Docker Points to Local Private Registry (with Ansible)
