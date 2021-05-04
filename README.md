@@ -240,6 +240,7 @@ ubuntu@master0:~/ansible$ tree
 
 1 directory, 2 files
 ```
+
 - Basic Configurations
 
   - `ansible.cfg`
@@ -415,6 +416,50 @@ docker run -d -p 5000:5000 --name registry \
 > Reference > https://windsock.io/automated-docker-image-builds-with-multiple-tags/
 
 #### Tag Pulled Docker Images then Upload into Local Registry
+
+- List images
+
+```sh
+ubuntu@master0:~/ansible$ docker image ls | grep -v 'REPOSITORY' | awk '{print $1":"$2}'
+quay.io/coreos/flannel:v0.14.0-rc1
+k8s.gcr.io/kube-proxy:v1.18.18
+k8s.gcr.io/kube-scheduler:v1.18.18
+k8s.gcr.io/kube-controller-manager:v1.18.18
+k8s.gcr.io/kube-apiserver:v1.18.18
+registry:2
+k8s.gcr.io/pause:3.2
+k8s.gcr.io/coredns:1.6.7
+k8s.gcr.io/etcd:3.4.3-0
+```
+
+- Save all images on environment with internet
+
+```sh
+mkdir -p ~/docker
+ubuntu@master0:~/docker$ docker save $(docker images -q) -o k8s_img.tar
+ubuntu@master0:~/docker$ ls -la
+total 804656
+drwxrwxr-x  2 ubuntu ubuntu      4096 May  4 09:52 .
+drwxr-xr-x 14 ubuntu ubuntu      4096 May  4 09:51 ..
+-rw-------  1 ubuntu ubuntu 823953408 May  4 09:52 k8s_img.tar
+```
+
+- Create docker images list
+
+```sh
+docker images | sed '1d' | awk '{print $1 " " $2 " " $3}' > dockerimages.list
+
+ubuntu@master0:~/docker$ cat dockerimages.list
+quay.io/coreos/flannel v0.14.0-rc1 0a1a2818ce59
+k8s.gcr.io/kube-proxy v1.18.18 8bd0db6f4d0a
+k8s.gcr.io/kube-scheduler v1.18.18 fe100f0c6984
+k8s.gcr.io/kube-apiserver v1.18.18 5745154baa89
+k8s.gcr.io/kube-controller-manager v1.18.18 9fb627f53264
+registry 2 1fd8e1b0bb7e
+k8s.gcr.io/pause 3.2 80d28bedfe5d
+k8s.gcr.io/coredns 1.6.7 67da37a9a360
+k8s.gcr.io/etcd 3.4.3-0 303ce5db0e90
+```
 
 
 
