@@ -15,6 +15,7 @@
   - [Ansible Env Setup](#ansible-env-setup)
   - [Air-Gapped Installation (optional) **](#air-gapped-installation-optional)
     - [Build a Private Docker Registry](#build-a-private-docker-registry)
+    - [Create Local Images](#create-local-images)
     - [Tag Pulled Docker Images then Upload into Local Registry](#tag-pulled-docker-images-then-upload-into-local-registry)
     - [Docker Points to Local Private Registry (with Ansible)](#docker-points-to-local-private-registry-with-ansible)
   - [Operating System](#operating-system)
@@ -401,21 +402,62 @@ Write up this solution for an airgapped environment and use a private docker reg
 
 #### Build a Private Docker Registry
 
+Generate self-signed certificate
+
+```sh
+ubuntu@master0:~/docker/certs$ openssl genrsa -out private.key
+Generating RSA private key, 2048 bit long modulus (2 primes)
+............................................+++++
+....................+++++
+e is 65537 (0x010001)
+ubuntu@master0:~/docker/certs$ openssl req -new -key private.key -out request.csr
+Can't load /home/ubuntu/.rnd into RNG
+140633467621824:error:2406F079:random number generator:RAND_load_file:Cannot open file:../crypto/rand/randfile.c:88:Filename=/home/ubuntu/.rnd
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Country Name (2 letter code) [AU]:
+State or Province Name (full name) [Some-State]:
+Locality Name (eg, city) []:
+Organization Name (eg, company) [Internet Widgits Pty Ltd]:
+Organizational Unit Name (eg, section) []:
+Common Name (e.g. server FQDN or YOUR name) []:registry.local
+Email Address []:
+
+Please enter the following 'extra' attributes
+to be sent with your certificate request
+A challenge password []:
+An optional company name []:
+ubuntu@master0:~/docker/certs$ openssl x509 -req -days 365 -in request.csr -signkey private.key -out cert.crt
+Signature ok
+subject=C = AU, ST = Some-State, O = Internet Widgits Pty Ltd, CN = registry.local
+Getting Private key
+```
+
 You need to pull `registry` image ahead of time
 
-> Reference > https://docker.github.io/get-involved/docs/communityleaders/eventhandbooks/docker101/registry/
+> Reference > https://docs.docker.com/registry/deploying/
 
 ```sh
 mkdir -p /home/ubuntu/registry
 
-docker run -d -p 5000:5000 --name registry \
-  -v /home/ubuntu/registry:/var/lib/registry \
-  --restart always registry:2
+docker run -d --restart=always --name registry \
+  -v /home/ubuntu/docker/certs:/certs \
+  -e REGISTRY_HTTP_ADDR=0.0.0.0:443 \
+  -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.crt \
+  -e REGISTRY_HTTP_TLS_KEY=/certs/private.key \
+  -p 443:443 registry:2
 ```
 
-> Reference > https://windsock.io/automated-docker-image-builds-with-multiple-tags/
+> Reference >
+> https://windsock.io/automated-docker-image-builds-with-multiple-tags/
+> https://linuxhint.com/create-crt-file-linux/
 
-#### Tag Pulled Docker Images then Upload into Local Registry
+#### Create Local Images
 
 - List images
 
@@ -443,6 +485,10 @@ drwxrwxr-x  2 ubuntu ubuntu      4096 May  4 09:52 .
 drwxr-xr-x 14 ubuntu ubuntu      4096 May  4 09:51 ..
 -rw-------  1 ubuntu ubuntu 823953408 May  4 09:52 k8s_img.tar
 ```
+
+This tar file contains all pre-requisite images to build a Kubernetes cluster.
+
+#### Tag Pulled Docker Images then Upload into Local Registry
 
 - Create docker images list
 
