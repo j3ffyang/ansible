@@ -360,28 +360,29 @@ ubuntu@master0:~/ansible$ cat main.yaml
     # - { role: os_hostname_set, when: "inventory_hostname in groups['worker']" }
     # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
     #
-    # - { role: docker_install, when: "inventory_hostname in groups['all']" }
-    # - { role: os_usr_create, when: "inventory_hostname in groups['all']" }
-    #
-    # - { role: os_swap_disable, when: "inventory_hostname in groups['all']" }
-    # - { role: k8s_install, when: "inventory_hostname in groups['all']" }
+    # - { role: docker_install, when: "inventory_hostname in groups['k8s_node']" }
+    # - { role: os_usr_create, when: "inventory_hostname in groups['k8s_node']" }
+    # #
+    # - { role: os_swap_disable, when: "inventory_hostname in groups['k8s_node']" }
+    # - { role: k8s_install, when: "inventory_hostname in groups['k8s_node']" }
     # - { role: k8s_init, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_kubeconfig, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_flannel, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_join_cmd, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
     # - { role: k8s_autocompletion, when: "inventory_hostname in groups['controller']" }
-    # - { role: os_lsblk, when: "inventory_hostname in groups['all']" }
+    # - { role: os_lsblk, when: "inventory_hostname in groups['k8s_node']" }
     #
     # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
     # - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
     # - { role: cert-manager, when: "inventory_hostname in groups['master']" }
-    - { role: prometheus, when: "inventory_hostname in groups['master']" }
+    # - { role: prometheus, when: "inventory_hostname in groups['master']" }
     # - { role: kubeseal, when: "inventory_hostname in groups['master']" }
     #
-    # - { role: test, when: "inventory_hostname in groups['master']" }
-
-ubuntu@master0:~/ansible$
+    # - { role: nginx_server, when: "inventory_hostname in groups['webserver']" }
+    #
+    # ######## Destroy Kubernetes ########
+    - { role: k8s_destroy, when: "inventory_hostname in groups['k8s_node']" }
 ```
 
 - Standard playbook execution command
@@ -689,8 +690,8 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
     - docker-ce
     - docker-ce-cli
     - containerd.io
-  notify:
-    - docker status
+    # notify:
+    # - docker status
 ```
 
 > Reference >
@@ -963,6 +964,28 @@ Consult with this reference, if you want to remove `docker` as well
 
 > Reference > https://hiberstack.com/10677/how-to-uninstall-docker-and-kubernetes/
 
+
+If you want to run the step one by one, you run the following in a batch
+
+**Caution: this will destroy the entire Kubernetes cluster, Docker and images**
+
+> Note: ``{{ uusername }}`` is defined in `global.yaml`
+
+```yml
+ubuntu@master0:~/ansible$ cat roles/k8s_destroy/tasks/main.yml
+---
+# tasks file for k8s_destroy
+- name: destroy kubernetes cluster and docker
+  shell: |
+    yes 'Y' | kubeadm reset
+    apt purge kubectl kubeadm kubelet kubernetes-cni -y
+    rm -fr /etc/kubernetes/; rm -fr /var/lib/etcd; rm -rf /var/lib/cni/; rm -fr /etc/cni/net.d
+    rm -fr /home/{{ uusername }}/.kube/
+    systemctl daemon-reload
+    iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+    docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
+    apt purge docker-ce docker-ce-cli docker-ce-rootless-extras docker-scan-plugin -y
+```
 
 #### (Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`
 

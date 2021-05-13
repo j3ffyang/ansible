@@ -1,0 +1,23 @@
+---
+# tasks file for k8s_destroy
+- name: destroy kubernetes cluster and docker
+  shell: |
+    yes 'Y' | kubeadm reset
+    apt purge kubectl kubeadm kubelet kubernetes-cni -y
+    rm -fr /etc/kubernetes/; rm -fr /var/lib/etcd; rm -rf /var/lib/cni/; rm -fr /etc/cni/net.d
+    rm -fr /home/{{ uusername }}/.kube/
+    systemctl daemon-reload
+    iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+    docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
+    apt purge docker-ce docker-ce-cli docker-ce-rootless-extras docker-scan-plugin -y
+
+  #   command: chdir=/ {{ item }}
+  #   with_items:
+  #     - yes 'Y' | kubeadm reset
+  #     - apt purge kubectl kubeadm kubelet kubernetes-cni -y
+  #     - rm -fr /etc/kubernetes/; rm -fr /var/lib/etcd; rm -rf /var/lib/cni/; rm -fr /etc/cni/net.d
+  #     - rm -fr /home/ubuntu/.kube/
+  #     - systemctl daemon-reload
+  #     - iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+  #     - docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
+  #     - apt purge docker-ce docker-ce-cli docker-ce-rootless-extras -y
