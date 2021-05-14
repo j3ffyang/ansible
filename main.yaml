@@ -9,8 +9,8 @@
     # - { role: os_hostname_set, when: "inventory_hostname in groups['worker']" }
     # - { role: os_ssh_auth, when: "inventory_hostname in groups['worker']" }
     #
-    # - { role: docker_install, when: "inventory_hostname in groups['k8s_node']" }
-    # - { role: os_usr_create, when: "inventory_hostname in groups['k8s_node']" }
+    - { role: docker_install, when: "inventory_hostname in groups['k8s_node']" }
+    - { role: os_usr_create, when: "inventory_hostname in groups['k8s_node']" }
     # #
     # - { role: os_swap_disable, when: "inventory_hostname in groups['k8s_node']" }
     # - { role: k8s_install, when: "inventory_hostname in groups['k8s_node']" }
@@ -31,4 +31,4 @@
     # - { role: nginx_server, when: "inventory_hostname in groups['webserver']" }
     #
     # ######## Destroy Kubernetes ########
-    - { role: k8s_destroy, when: "inventory_hostname in groups['k8s_node']" }
+    # - { role: k8s_destroy, when: "inventory_hostname in groups['k8s_node']" }

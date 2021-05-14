@@ -13,11 +13,6 @@
     - [`firewalld`](#firewalld)
     - [Firewall Rules for `kubeadm`](#firewall-rules-for-kubeadm)
   - [Ansible Env Setup](#ansible-env-setup)
-  - [Air-Gapped Installation (optional) **](#air-gapped-installation-optional)
-    - [Build a Private Docker Registry](#build-a-private-docker-registry)
-    - [Create Local Images](#create-local-images)
-    - [Tag Pulled Docker Images then Upload into Local Registry](#tag-pulled-docker-images-then-upload-into-local-registry)
-    - [Docker Points to Local Private Registry (with Ansible)](#docker-points-to-local-private-registry-with-ansible)
   - [Operating System](#operating-system)
     - [Delete Unused Packages - `role: os_pkg_rm`](#delete-unused-packages-role-os_pkg_rm)
     - [Set `/etc/hosts` - `role: os_hosts_mod`](#set-etchosts-role-os_hosts_mod)
@@ -25,7 +20,11 @@
     - [Create a `nonroot` user on all nodes, including `control` node - `role: os_usr_create`](#create-a-nonroot-user-on-all-nodes-including-control-node-role-os_usr_create)
   - [Docker](#docker)
     - [Install docker (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
-    - [Point to `quay.io` for docker image, instead of `dockerhub.com`](#point-to-quayio-for-docker-image-instead-of-dockerhubcom)
+  - [Air-Gapped Installation (optional) **](#air-gapped-installation-optional)
+    - [Build a Private Docker Registry](#build-a-private-docker-registry)
+    - [Create Local Images](#create-local-images)
+    - [Tag Pulled Docker Images then Upload into Local Registry](#tag-pulled-docker-images-then-upload-into-local-registry)
+    - [Docker Points to Local Private Registry (with Ansible)](#docker-points-to-local-private-registry-with-ansible)
   - [Kubernetes (specific version) - `1.18.18`](#kubernetes-specific-version-11818)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
     - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
@@ -38,7 +37,6 @@
     - [(Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`](#optional-autocomplete-and-alias-for-kubectl-and-kubeadm-role-k8s_autocompletion)
     - [Custom persistentVolume](#custom-persistentvolume)
     - [Kubernetes upgrade for an existing cluster](#kubernetes-upgrade-for-an-existing-cluster)
-    - [Airgap Docker and Kubernetes Install](#airgap-docker-and-kubernetes-install)
     - [Configure Kubernetes HA](#configure-kubernetes-ha)
   - [Helm3](#helm3)
     - [Install `helm3` - `role: helm3_install`](#install-helm3-role-helm3_install)
@@ -67,6 +65,7 @@
 - Simplify deployment of a Kubernetes platform and a bunch of common applications, such as Nginx, PostgreSQL, Prometheus, etc
 - Deploy bastion-host (DMZ) and upfront Nginx webServer, manage system hardening, configure firewall
 - Define a kind of standardized environment where VANTIQ product can be deployed, as well as operational and manage-able, other than conforming cloud service provider
+- If an **airgapped** installation is needed, check "Air-Gapped Installation (optional)" and this part could be performance after `docker` installed before `kubernetes` started
 
 ## Pre-requisite
 
@@ -283,11 +282,16 @@ ubuntu@master0:~/ansible$ tree
 
   - `global.yaml` - global variable
 
-  ```sh
+  ```yml
   ubuntu@master0:~/ansible$ cat global.yaml
-
-  uusername: nonroot
+  uusername: ubuntu
   vaulted_passwd: secret
+
+  k8s_version: 1.18.18-00
+  k8s_packages:
+          - kubelet
+          - kubeadm
+          - kubectl
   ```
 
 - Test Connections
@@ -387,133 +391,15 @@ ubuntu@master0:~/ansible$ cat main.yaml
 
 - Standard playbook execution command
 
-__Make sure comment out `roles` in `main.yaml` for particular action you want to perform__. Uncomment out all to execute all actions in one click. The `role` value in `main.yaml` must be identical to the one created by `ansible-galaxy init`
+__Make sure uncomment the `roles` in `main.yaml` for particular action(s) you want to perform__. Uncomment all to execute all actions in one click. The `role` value in `main.yaml` must be identical to the one created by `ansible-galaxy init`
+
+> Caution: there is a role called `k8s_destroy`, which will destroy the existing Kubernetes cluster and Docker!
 
 ```sh
 ansible-playbook --extra-vars @global.yaml main.yaml
 ```
 
-> Will explain `global.yaml` later in this document
-
----
-
-### Air-Gapped Installation (optional) **
-
-Write up this solution for an airgapped environment and use a private docker registry
-
-#### Build a Private Docker Registry
-
-Generate self-signed certificate
-
-```sh
-ubuntu@master0:~/docker/certs$ openssl genrsa -out private.key
-Generating RSA private key, 2048 bit long modulus (2 primes)
-............................................+++++
-....................+++++
-e is 65537 (0x010001)
-ubuntu@master0:~/docker/certs$ openssl req -new -key private.key -out request.csr
-Can't load /home/ubuntu/.rnd into RNG
-140633467621824:error:2406F079:random number generator:RAND_load_file:Cannot open file:../crypto/rand/randfile.c:88:Filename=/home/ubuntu/.rnd
-You are about to be asked to enter information that will be incorporated
-into your certificate request.
-What you are about to enter is what is called a Distinguished Name or a DN.
-There are quite a few fields but you can leave some blank
-For some fields there will be a default value,
-If you enter '.', the field will be left blank.
------
-Country Name (2 letter code) [AU]:
-State or Province Name (full name) [Some-State]:
-Locality Name (eg, city) []:
-Organization Name (eg, company) [Internet Widgits Pty Ltd]:
-Organizational Unit Name (eg, section) []:
-Common Name (e.g. server FQDN or YOUR name) []:registry.local
-Email Address []:
-
-Please enter the following 'extra' attributes
-to be sent with your certificate request
-A challenge password []:
-An optional company name []:
-ubuntu@master0:~/docker/certs$ openssl x509 -req -days 365 -in request.csr -signkey private.key -out cert.crt
-Signature ok
-subject=C = AU, ST = Some-State, O = Internet Widgits Pty Ltd, CN = registry.local
-Getting Private key
-```
-
-You need to pull `registry` image ahead of time
-
-> Reference > https://docs.docker.com/registry/deploying/
-
-```sh
-mkdir -p /home/ubuntu/registry
-
-docker run -d --restart=always --name registry \
-  -v /home/ubuntu/docker/certs:/certs \
-  -e REGISTRY_HTTP_ADDR=0.0.0.0:443 \
-  -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/cert.crt \
-  -e REGISTRY_HTTP_TLS_KEY=/certs/private.key \
-  -p 443:443 registry:2
-```
-
-> Reference >
-> https://windsock.io/automated-docker-image-builds-with-multiple-tags/
-> https://linuxhint.com/create-crt-file-linux/
-
-#### Create Local Images
-
-- List images
-
-```sh
-ubuntu@master0:~/ansible$ docker image ls | grep -v 'REPOSITORY' | awk '{print $1":"$2}'
-quay.io/coreos/flannel:v0.14.0-rc1
-k8s.gcr.io/kube-proxy:v1.18.18
-k8s.gcr.io/kube-scheduler:v1.18.18
-k8s.gcr.io/kube-controller-manager:v1.18.18
-k8s.gcr.io/kube-apiserver:v1.18.18
-registry:2
-k8s.gcr.io/pause:3.2
-k8s.gcr.io/coredns:1.6.7
-k8s.gcr.io/etcd:3.4.3-0
-```
-
-- Save all images on environment with internet
-
-```sh
-mkdir -p ~/docker
-ubuntu@master0:~/docker$ docker save $(docker images -q) -o k8s_img.tar
-ubuntu@master0:~/docker$ ls -la
-total 804656
-drwxrwxr-x  2 ubuntu ubuntu      4096 May  4 09:52 .
-drwxr-xr-x 14 ubuntu ubuntu      4096 May  4 09:51 ..
--rw-------  1 ubuntu ubuntu 823953408 May  4 09:52 k8s_img.tar
-```
-
-This tar file contains all pre-requisite images to build a Kubernetes cluster.
-
-#### Tag Pulled Docker Images then Upload into Local Registry
-
-- Create docker images list
-
-```sh
-docker images | sed '1d' | awk '{print $1 " " $2 " " $3}' > dockerimages.list
-
-ubuntu@master0:~/docker$ cat dockerimages.list
-quay.io/coreos/flannel v0.14.0-rc1 0a1a2818ce59
-k8s.gcr.io/kube-proxy v1.18.18 8bd0db6f4d0a
-k8s.gcr.io/kube-scheduler v1.18.18 fe100f0c6984
-k8s.gcr.io/kube-apiserver v1.18.18 5745154baa89
-k8s.gcr.io/kube-controller-manager v1.18.18 9fb627f53264
-registry 2 1fd8e1b0bb7e
-k8s.gcr.io/pause 3.2 80d28bedfe5d
-k8s.gcr.io/coredns 1.6.7 67da37a9a360
-k8s.gcr.io/etcd 3.4.3-0 303ce5db0e90
-```
-
-- Tag images
-
-> Reference > https://stackoverflow.com/questions/35575674/how-to-save-all-docker-images-and-copy-to-another-machine
-
-
-#### Docker Points to Local Private Registry (with Ansible)
+where `global.yaml` contains the global variables.
 
 ---
 
@@ -698,7 +584,84 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 - https://horrell.ca/2020/06/18/installing-docker-on-ubuntu-with-ansible/
 - https://kubernetes.io/blog/2019/03/15/kubernetes-setup-using-ansible-and-vagrant/ # updated 20210405 for `containerd`
 
-#### Point to `quay.io` for docker image, instead of `dockerhub.com`
+---
+
+### Air-Gapped Installation (optional) **
+
+Write up this solution for an airgapped environment and use a private docker registry. This part covers the pre-requisite docker container environment setup, before VANTIQ can be deployed.
+
+#### Build a Private Docker Registry
+
+The objective of building a private local docker registry to provide images within an isolated network. A simplest registry should work well for this requirement. Therefore this part of document doesn't cover SSL and other hardening steps.
+
+```sh
+mkdir -p /home/ubuntu/registry
+
+docker run -d -p 5000:5000 --name registry \
+  -v /home/ubuntu/registry:/var/lib/registry \
+  --restart always registry:2
+```
+
+> Reference >
+> https://windsock.io/automated-docker-image-builds-with-multiple-tags/
+> https://linuxhint.com/create-crt-file-linux/
+
+#### Create Local Images
+
+- List images
+
+```sh
+ubuntu@master0:~/ansible$ docker image ls | grep -v 'REPOSITORY' | awk '{print $1":"$2}'
+quay.io/coreos/flannel:v0.14.0-rc1
+k8s.gcr.io/kube-proxy:v1.18.18
+k8s.gcr.io/kube-scheduler:v1.18.18
+k8s.gcr.io/kube-controller-manager:v1.18.18
+k8s.gcr.io/kube-apiserver:v1.18.18
+registry:2
+k8s.gcr.io/pause:3.2
+k8s.gcr.io/coredns:1.6.7
+k8s.gcr.io/etcd:3.4.3-0
+```
+
+- Save all images on environment with internet
+
+```sh
+mkdir -p ~/docker
+ubuntu@master0:~/docker$ docker save $(docker images -q) -o k8s_img.tar
+ubuntu@master0:~/docker$ ls -la
+total 804656
+drwxrwxr-x  2 ubuntu ubuntu      4096 May  4 09:52 .
+drwxr-xr-x 14 ubuntu ubuntu      4096 May  4 09:51 ..
+-rw-------  1 ubuntu ubuntu 823953408 May  4 09:52 k8s_img.tar
+```
+
+This tar file contains all pre-requisite images to build a Kubernetes cluster.
+
+#### Tag Pulled Docker Images then Upload into Local Registry
+
+- Create docker images list
+
+```sh
+docker images | sed '1d' | awk '{print $1 " " $2 " " $3}' > dockerimages.list
+
+ubuntu@master0:~/docker$ cat dockerimages.list
+quay.io/coreos/flannel v0.14.0-rc1 0a1a2818ce59
+k8s.gcr.io/kube-proxy v1.18.18 8bd0db6f4d0a
+k8s.gcr.io/kube-scheduler v1.18.18 fe100f0c6984
+k8s.gcr.io/kube-apiserver v1.18.18 5745154baa89
+k8s.gcr.io/kube-controller-manager v1.18.18 9fb627f53264
+registry 2 1fd8e1b0bb7e
+k8s.gcr.io/pause 3.2 80d28bedfe5d
+k8s.gcr.io/coredns 1.6.7 67da37a9a360
+k8s.gcr.io/etcd 3.4.3-0 303ce5db0e90
+```
+
+- Tag images
+
+> Reference > https://stackoverflow.com/questions/35575674/how-to-save-all-docker-images-and-copy-to-another-machine
+
+
+#### Docker Points to Local Private Registry (with Ansible)
 
 ---
 
@@ -1148,8 +1111,6 @@ ok: [worker1] => {
 
 
 #### Kubernetes upgrade for an existing cluster
-
-#### Airgap Docker and Kubernetes Install
 
 #### Configure Kubernetes HA
 
