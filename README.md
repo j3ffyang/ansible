@@ -21,9 +21,9 @@
   - [Docker](#docker)
     - [Install docker (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
   - [Air-Gapped Installation (optional) **](#air-gapped-installation-optional)
-    - [Build a Private Docker Registry](#build-a-private-docker-registry)
-    - [Create Local Images](#create-local-images)
-    - [Tag Pulled Docker Images then Upload into Local Registry](#tag-pulled-docker-images-then-upload-into-local-registry)
+    - [Create Local Images (option 1)](#create-local-images-option-1)
+    - [Build a Private Docker Registry (option 2)](#build-a-private-docker-registry-option-2)
+    - [Tag Pulled Docker Images then Push into Local Registry](#tag-pulled-docker-images-then-push-into-local-registry)
     - [Docker Points to Local Private Registry (with Ansible)](#docker-points-to-local-private-registry-with-ansible)
   - [Kubernetes (specific version) - `1.18.18`](#kubernetes-specific-version-11818)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
@@ -590,23 +590,7 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 
 Write up this solution for an airgapped environment and use a private docker registry. This part covers the pre-requisite docker container environment setup, before VANTIQ can be deployed.
 
-#### Build a Private Docker Registry
-
-The objective of building a private local docker registry to provide images within an isolated network. A simplest registry should work well for this requirement. Therefore this part of document doesn't cover SSL and other hardening steps.
-
-```sh
-mkdir -p /home/ubuntu/registry
-
-docker run -d -p 5000:5000 --name registry \
-  -v /home/ubuntu/registry:/var/lib/registry \
-  --restart always registry:2
-```
-
-> Reference >
-> https://windsock.io/automated-docker-image-builds-with-multiple-tags/
-> https://linuxhint.com/create-crt-file-linux/
-
-#### Create Local Images
+#### Create Local Images (option 1)
 
 - List images
 
@@ -635,31 +619,87 @@ drwxr-xr-x 14 ubuntu ubuntu      4096 May  4 09:51 ..
 -rw-------  1 ubuntu ubuntu 823953408 May  4 09:52 k8s_img.tar
 ```
 
-This tar file contains all pre-requisite images to build a Kubernetes cluster.
+This tar file contains all pre-requisite images to build a Kubernetes cluster. You can copy `k8s_img.tar` into a thumb-drive and bring it with you to install.
 
-#### Tag Pulled Docker Images then Upload into Local Registry
+#### Build a Private Docker Registry (option 2)
 
-- Create docker images list
+The objective of building a private local docker registry to provide images within an isolated network. A simplest registry should work well for this requirement. Therefore this part of document doesn't cover SSL and other hardening steps.
 
-```sh
-docker images | sed '1d' | awk '{print $1 " " $2 " " $3}' > dockerimages.list
+- Enable insecure registry
 
-ubuntu@master0:~/docker$ cat dockerimages.list
-quay.io/coreos/flannel v0.14.0-rc1 0a1a2818ce59
-k8s.gcr.io/kube-proxy v1.18.18 8bd0db6f4d0a
-k8s.gcr.io/kube-scheduler v1.18.18 fe100f0c6984
-k8s.gcr.io/kube-apiserver v1.18.18 5745154baa89
-k8s.gcr.io/kube-controller-manager v1.18.18 9fb627f53264
-registry 2 1fd8e1b0bb7e
-k8s.gcr.io/pause 3.2 80d28bedfe5d
-k8s.gcr.io/coredns 1.6.7 67da37a9a360
-k8s.gcr.io/etcd 3.4.3-0 303ce5db0e90
+```json
+ubuntu@master0:~/ansible$ cat /etc/docker/daemon.json
+{
+  "insecure-registries" : [ "localhost:5000" ]
+}
 ```
 
-- Tag images
+```sh
+sudo systemctl restart docker
+```
+
+- Edit `/etc/hosts`, if you want to use hostname instead of IP address for `registry`
+
+```sh
+cat /etc/hosts
+
+10.39.64.10	master0 k8s-master registry.local
+10.39.64.20	worker0
+10.39.64.21	worker1
+```
+
+- Launch `registry`
+
+```sh
+mkdir -p /home/ubuntu/registry
+
+docker run -d -p 5000:5000 --name registry \
+  -v /home/ubuntu/registry:/var/lib/registry \
+  --restart always registry:2
+```
+
+> Reference >
+> https://windsock.io/automated-docker-image-builds-with-multiple-tags/
+> https://linuxhint.com/create-crt-file-linux/
+
+#### Tag Pulled Docker Images then Push into Local Registry
+
+- Tag and push images
+
+```sh
+ubuntu@master0:~/docker$ cat img_tag.sh
+#!/bin/bash
+
+# create /tmp/img.lst with repo:tag
+docker images | sed '1d' | grep -v "registry" | awk '{print $1 ":" $2}' > /tmp/img.lst
+# cat /tmp/img.lst
+
+# replace repo with registry.local:5000
+awk -F'.io' '{print $0, "registry.local:5000" $2}' /tmp/img.lst > /tmp/tag.lst
+# cat /tmp/tag.lst
+
+# read lines, then tag the imgs
+while read i; do docker tag $i; done < /tmp/tag.lst
+
+# push images into registry.local:5000
+for i in `docker images | grep "registry.local:5000" | awk '{print $1 ":" $2}'`; do docker push $i; done
+
+# remove all tagged img
+# docker rmi `docker images | grep "10.39" | awk '{print $1 ":"  $2}'`
+
+# clean up tmp files
+# rm -fr /tmp/img.lst
+# rm -fr /tmp/tag.lst
+```
 
 > Reference > https://stackoverflow.com/questions/35575674/how-to-save-all-docker-images-and-copy-to-another-machine
 
+- Check pushed images
+
+```sh
+ubuntu@master0:~/docker$ curl -X GET http://registry.local:5000/v2/_catalog
+{"repositories":["registry"]}
+```
 
 #### Docker Points to Local Private Registry (with Ansible)
 
