@@ -25,6 +25,7 @@
     - [Build a Private Docker Registry (option 2)](#build-a-private-docker-registry-option-2)
     - [Tag Pulled Docker Images then Push into Local Registry](#tag-pulled-docker-images-then-push-into-local-registry)
     - [Docker Points to Local Private Registry (with Ansible)](#docker-points-to-local-private-registry-with-ansible)
+    - [Remove tagged images and destroy repository](#remove-tagged-images-and-destroy-repository)
   - [Kubernetes (specific version) - `1.18.18`](#kubernetes-specific-version-11818)
     - [Disable `swap` - `role: os_swap_disable`](#disable-swap-role-os_swap_disable)
     - [Install Kubernetes - `role: k8s_install`](#install-kubernetes-role-k8s_install)
@@ -625,19 +626,6 @@ This tar file contains all pre-requisite images to build a Kubernetes cluster. Y
 
 The objective of building a private local docker registry to provide images within an isolated network. A simplest registry should work well for this requirement. Therefore this part of document doesn't cover SSL and other hardening steps.
 
-- Enable insecure registry
-
-```json
-ubuntu@master0:~/ansible$ cat /etc/docker/daemon.json
-{
-  "insecure-registries" : [ "localhost:5000" ]
-}
-```
-
-```sh
-sudo systemctl restart docker
-```
-
 - Edit `/etc/hosts`, if you want to use hostname instead of IP address for `registry`
 
 ```sh
@@ -646,6 +634,19 @@ cat /etc/hosts
 10.39.64.10	master0 k8s-master registry.local
 10.39.64.20	worker0
 10.39.64.21	worker1
+```
+
+- Enable insecure registry
+
+```json
+ubuntu@master0:~/ansible$ cat /etc/docker/daemon.json
+{
+  "insecure-registries" : [ "registry.local:5000" ]
+}
+```
+
+```sh
+sudo systemctl restart docker
 ```
 
 - Launch `registry`
@@ -682,10 +683,10 @@ awk -F'.io' '{print $0, "registry.local:5000" $2}' /tmp/img.lst > /tmp/tag.lst
 while read i; do docker tag $i; done < /tmp/tag.lst
 
 # push images into registry.local:5000
-for i in `docker images | grep "registry.local:5000" | awk '{print $1 ":" $2}'`; do docker push $i; done
+for i in `docker images | grep "registry.local" | awk '{print $1 ":"  $2}'`; do docker push $i; done
 
 # remove all tagged img
-# docker rmi `docker images | grep "10.39" | awk '{print $1 ":"  $2}'`
+# docker rmi `docker images | grep "registry.local" | awk '{print $1 ":"  $2}'`
 
 # clean up tmp files
 # rm -fr /tmp/img.lst
@@ -698,10 +699,46 @@ for i in `docker images | grep "registry.local:5000" | awk '{print $1 ":" $2}'`;
 
 ```sh
 ubuntu@master0:~/docker$ curl -X GET http://registry.local:5000/v2/_catalog
-{"repositories":["registry"]}
+{"repositories":["coredns","coreos/flannel","etcd","kube-apiserver","kube-controller-manager","kube-proxy","kube-scheduler","pause","registry"]}
 ```
 
 #### Docker Points to Local Private Registry (with Ansible)
+
+- Update `/etc/hosts`
+- Update `/etc/docker/daemon.json`
+
+The code
+
+```yml
+# tasks file for local private registry
+- name: update /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: 10.39.64.10	master0 k8s-master registry.local
+
+- name: point to private registry
+  copy:
+    dest: "/etc/docker/daemon.json"
+    content: |
+      {
+        registry-mirrors": ["https://registry.local:5000"]
+      }
+```
+
+#### Remove tagged images and destroy repository
+
+This step only removes the tagged images.
+
+```sh
+# stop registry
+docker rm -f registry
+
+# remove all tags
+docker rmi `docker images | grep "registry.local" | awk '{print $1 ":" $2}'`
+
+# hard delete all pushed images
+sudo rm -fr /home/ubuntu/registry
+```
 
 ---
 
@@ -970,7 +1007,7 @@ Consult with this reference, if you want to remove `docker` as well
 
 If you want to run the step one by one, you run the following in a batch
 
-**Caution: this will destroy the entire Kubernetes cluster, Docker and images**
+**Caution: this will destroy the entire Kubernetes cluster, Docker environment!**
 
 > Note: ``{{ uusername }}`` is defined in `global.yaml`
 
@@ -989,6 +1026,10 @@ ubuntu@master0:~/ansible$ cat roles/k8s_destroy/tasks/main.yml
     docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
     apt purge docker-ce docker-ce-cli docker-ce-rootless-extras docker-scan-plugin -y
 ```
+
+> Reference >
+https://stackoverflow.com/questions/24851575/ansible-how-to-pass-multiple-commands
+https://stackoverflow.com/questions/41871918/how-to-let-ansible-answer-yes-to-everything-sendmailconfig-asks
 
 #### (Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`
 
