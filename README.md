@@ -1007,7 +1007,7 @@ Consult with this reference, if you want to remove `docker` as well
 
 If you want to run the step one by one, you run the following in a batch
 
-**Caution: this will destroy the entire Kubernetes cluster, Docker environment!**
+**Caution: this will destroy the entire Kubernetes cluster and Docker environment!**
 
 > Note: ``{{ uusername }}`` is defined in `global.yaml`
 
