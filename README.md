@@ -546,7 +546,7 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 ---
 # tasks file for docker_install
 
-- name: Install docker packages
+- name: Install pre-requisite packages
   apt:
     update_cache: yes
     name:
