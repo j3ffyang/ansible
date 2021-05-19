@@ -21,12 +21,12 @@
     - { role: k8s_join_node, when: "inventory_hostname in groups['worker']" }
     - { role: k8s_autocompletion, when: "inventory_hostname in groups['controller']" }
     - { role: os_lsblk, when: "inventory_hostname in groups['k8s_node']" }
-    #
-    # - { role: helm3_install, when: "inventory_hostname in groups['master']" }
-    # - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
-    # - { role: cert-manager, when: "inventory_hostname in groups['master']" }
-    # - { role: prometheus, when: "inventory_hostname in groups['master']" }
-    # - { role: kubeseal, when: "inventory_hostname in groups['master']" }
+    
+    - { role: helm3_install, when: "inventory_hostname in groups['master']" }
+    - { role: k8s_ingress_nginx, when: "inventory_hostname in groups['master']" }
+    - { role: cert-manager, when: "inventory_hostname in groups['master']" }
+    - { role: prometheus, when: "inventory_hostname in groups['master']" }
+    - { role: kubeseal, when: "inventory_hostname in groups['master']" }
     #
     # - { role: nginx_server, when: "inventory_hostname in groups['webserver']" }
     #

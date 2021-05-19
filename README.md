@@ -704,10 +704,8 @@ ubuntu@master0:~/docker$ curl -X GET http://registry.local:5000/v2/_catalog
 
 #### Docker Points to Local Private Registry (with Ansible)
 
-- Update `/etc/hosts`
-- Update `/etc/docker/daemon.json`
-
-The code
+- Update `/etc/hosts` on all workers
+- Update `/etc/docker/daemon.json` on all workers
 
 ```yml
 # tasks file for local private registry
@@ -1025,6 +1023,9 @@ ubuntu@master0:~/ansible$ cat roles/k8s_destroy/tasks/main.yml
     iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
     docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
     apt purge docker-ce docker-ce-cli docker-ce-rootless-extras docker-scan-plugin -y
+    ip link delete cni0
+    ip link delete flannel.1
+    ip link delete docker0
 ```
 
 > Reference >

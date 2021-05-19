@@ -10,6 +10,9 @@
     iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
     docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
     apt purge docker-ce docker-ce-cli docker-ce-rootless-extras docker-scan-plugin -y
+    ip link delete cni0
+    ip link delete flannel.1
+    ip link delete docker0
 
   #   command: chdir=/ {{ item }}
   #   with_items:
