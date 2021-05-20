@@ -770,12 +770,14 @@ First set variable
 
 ```yml
 ubuntu@master0:~/ansible$ cat global.yaml
+uusername: ubuntu
+vaulted_passwd: secret
 
-k8s_version: 1.18.18-00
+k8s_version: "1.18.18-00"
 k8s_packages:
-        - kubelet
-        - kubeadm
-        - kubectl
+  - kubelet
+  - kubeadm
+  - kubectl
 ```
 
 Then both variable of `k8s_packages` and `k8s_version` are set `~/global.yaml` and `k8s_packages` is installed in a for-loop pattern.

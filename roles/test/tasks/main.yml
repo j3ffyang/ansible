@@ -1,0 +1,17 @@
+---
+# tasks file for test
+
+- name: test doing nothing
+  debug:
+    msg: "apt install {{ item }}={{ k8s_version }}"
+  with_items: "{{ k8s_packages }}"
+ 
+# - name: A simple list
+#   debug:
+#     msg: "My Fruit is {{ item }}"
+#   with_items:
+#   - apple
+#   - banana
+#   - orange
+#   - pineapple
+#   - grapes
