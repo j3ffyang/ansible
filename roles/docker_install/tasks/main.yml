@@ -23,14 +23,10 @@
     state: present
   
 - name: Install Docker
-  apt:
+  package:
     update_cache: yes
-    name: "{{ packages }}"
+    name: "{{ item }}"
     state: present
-  vars:
-    packages:
-    - docker-ce
-    - docker-ce-cli
-    - containerd.io
-    # notify:
-    # - docker status
+  loop: "{{ docker_packages}}"
+  # notify:
+  # - start docker 

@@ -567,7 +567,7 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
     repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release | lower }} stable
     state: present
 
-- name: Install docker
+- name: Install Docker
   apt:
     update_cache: yes
     name: "{{ packages }}"

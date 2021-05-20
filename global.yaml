@@ -1,6 +1,12 @@
 uusername: ubuntu
 vaulted_passwd: zaq12wsx
 
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - curl
+
 k8s_version: "1.18.18-00"
 k8s_packages:
   - kubelet
