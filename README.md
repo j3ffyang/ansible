@@ -49,6 +49,7 @@
     - [~~`sealedSecrets` by `kubeseal`~~](#~~sealedsecrets-by-kubeseal~~)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Reference](#reference)
+    - [Rook Storage Cluster with Ceph](#rook-storage-cluster-with-ceph)
     - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
 - [Appendix](#appendix)
     - [Full HA of Nginx](#full-ha-of-nginx)
@@ -1586,6 +1587,43 @@ sudo apt-get --purge remove nginx-*
         10.39.64.21	worker1
   ```
 
+#### Rook Storage Cluster with Ceph
+
+> Reference > https://github.com/rook/rook/blob/master/Documentation/ceph-quickstart.md
+
+```sh
+git clone --single-branch --branch master https://github.com/rook/rook.git
+
+ubuntu@master0:~/rook$ cd cluster/examples/kubernetes/ceph/
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k create -f crds.yaml -f common.yaml -f operator.yaml
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k create -f cluster.yaml
+```
+
+- Check the status
+
+```sh
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k get ns
+NAME              STATUS   AGE
+cert-manager      Active   5m12s
+default           Active   6m3s
+ingress-nginx     Active   5m20s
+kube-node-lease   Active   6m4s
+kube-public       Active   6m4s
+kube-system       Active   6m4s
+rook-ceph         Active   20s
+
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k -n rook-ceph get all
+NAME                                      READY   STATUS    RESTARTS   AGE
+pod/rook-ceph-operator-5ddd885974-l85kg   1/1     Running   0          37s
+
+NAME                                 READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/rook-ceph-operator   1/1     1            1           37s
+
+NAME                                            DESIRED   CURRENT   READY   AGE
+replicaset.apps/rook-ceph-operator-5ddd885974   1         1         1       37s
+```
+
+---
 #### Beyond this point, VANTIQ deployment can start from now
 ---
 
