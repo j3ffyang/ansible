@@ -48,11 +48,11 @@
     - [Prometheus - `role: prometheus`](#prometheus-role-prometheus)
     - [~~`sealedSecrets` by `kubeseal`~~](#~~sealedsecrets-by-kubeseal~~)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
-    - [Reference](#reference)
     - [Rook Storage Cluster with Ceph](#rook-storage-cluster-with-ceph)
     - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
 - [Appendix](#appendix)
     - [Full HA of Nginx](#full-ha-of-nginx)
+    - [Reference](#reference)
     - [Comparison between `terraform` and `ansible`](#comparison-between-terraform-and-ansible)
     - [Sample code](#sample-code)
     - [Format Raw Disk](#format-raw-disk)
@@ -1569,23 +1569,6 @@ sudo apt-get --purge remove nginx-*
 - HA. Refer to Full HA of Nginx in Appendix
 - Perf tuning, caching
 
-#### Reference
-
-- Copy a file
-
-  ```yml
-  cat roles/os_hosts_cp/tasks/main.yml
-  ---
-  # tasks file for os_mod_hosts
-  - name: Insert multiple lines and Backup
-    blockinfile:
-      path: /etc/hosts
-      backup: yes
-      block: |
-        10.39.64.10	master0
-        10.39.64.20	worker0
-        10.39.64.21	worker1
-  ```
 
 #### Rook Storage Cluster with Ceph
 
@@ -1672,6 +1655,25 @@ privip ..> intip2
 privip2 ..> intip1
 privip2 --> intip2
 ```
+
+#### Reference
+
+- Copy a file
+
+  ```yml
+  cat roles/os_hosts_cp/tasks/main.yml
+  ---
+  # tasks file for os_mod_hosts
+  - name: Insert multiple lines and Backup
+    blockinfile:
+      path: /etc/hosts
+      backup: yes
+      block: |
+        10.39.64.10	master0
+        10.39.64.20	worker0
+        10.39.64.21	worker1
+  ```
+
 
 #### Comparison between `terraform` and `ansible`
 
