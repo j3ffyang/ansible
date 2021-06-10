@@ -20,7 +20,7 @@
     - [Create a `nonroot` user on all nodes, including `control` node - `role: os_usr_create`](#create-a-nonroot-user-on-all-nodes-including-control-node-role-os_usr_create)
   - [Docker](#docker)
     - [Install docker (containerd.io) - `role: docker_install`](#install-docker-containerdio-role-docker_install)
-  - [Air-Gapped Installation (optional) **](#air-gapped-installation-optional)
+  - [Air-Gapped Installation (optional)](#air-gapped-installation-optional)
     - [Create Local Images (option 1)](#create-local-images-option-1)
     - [Build a Private Docker Registry (option 2)](#build-a-private-docker-registry-option-2)
     - [Tag Pulled Docker Images then Push into Local Registry](#tag-pulled-docker-images-then-push-into-local-registry)
@@ -49,7 +49,6 @@
     - [~~`sealedSecrets` by `kubeseal`~~](#~~sealedsecrets-by-kubeseal~~)
     - [Upfront Nginx Web Server on VM(s)](#upfront-nginx-web-server-on-vms)
     - [Rook Storage Cluster with Ceph](#rook-storage-cluster-with-ceph)
-    - [Beyond this point, VANTIQ deployment can start from now](#beyond-this-point-vantiq-deployment-can-start-from-now)
 - [Appendix](#appendix)
     - [Full HA of Nginx](#full-ha-of-nginx)
     - [Reference](#reference)
@@ -59,6 +58,10 @@
     - [Global Variable](#global-variable)
     - [Template in `j2`](#template-in-j2)
     - [Task and Sub-Tasks](#task-and-sub-tasks)
+    - [Rook Storage Cluster with Ceph through YAML](#rook-storage-cluster-with-ceph-through-yaml)
+- [Troubleshooting](#troubleshooting)
+    - [Terminating namespace gets stuck](#terminating-namespace-gets-stuck)
+    - [Clean up Resources](#clean-up-resources)
 
 <!-- /code_chunk_output -->
 
@@ -589,7 +592,7 @@ ubuntu@master0:~/ansible$ cat roles/docker_install/tasks/main.yml
 
 ---
 
-### Air-Gapped Installation (optional) **
+### Air-Gapped Installation (optional)
 
 Write up this solution for an airgapped environment and use a private docker registry. This part covers the pre-requisite docker container environment setup, before VANTIQ can be deployed.
 
@@ -1572,42 +1575,218 @@ sudo apt-get --purge remove nginx-*
 
 #### Rook Storage Cluster with Ceph
 
+- Install by Helm3
+
+> Reference > https://rook.io/docs/rook/v1.6/helm-operator.html
+
+```sh
+helm repo add rook-release https://charts.rook.io/release
+kubectl create namespace rook-ceph
+helm install --namespace rook-ceph rook-ceph rook-release/rook-ceph
+```
+
+
+- Pre-requisite
+
+Since I have only 3 nodes in Kubernetes cluster, including `master`, I have to utilize `master` as a `worker` for this testcase.
+
+```sh
+kubectl describe nodes k8s-master | grep "Taints:"
+Taints:             node-role.kubernetes.io/master:NoSchedule
+```
+
+```sh
+kubectl taint nodes --all node-role.kubernetes.io/master-
+```
+
+or
+
+```sh
+kubectl taint nodes --all node-role.kubernetes.io/master:NoSchedule-
+```
+
+```sh
+kubectl describe nodes k8s-master | grep "Taints:"
+Taints:             <none>
+```
+
+- Download and Install
+
+Use the most latest one when writing this document
+
+```sh
+git clone --single-branch --branch release-1.6 https://github.com/rook/rook.git
+```
+
 > Reference > https://github.com/rook/rook/blob/master/Documentation/ceph-quickstart.md
 
 ```sh
-git clone --single-branch --branch master https://github.com/rook/rook.git
-
-ubuntu@master0:~/rook$ cd cluster/examples/kubernetes/ceph/
-ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k create -f crds.yaml -f common.yaml -f operator.yaml
-ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k create -f cluster.yaml
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k apply -f cluster.yaml
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k apply -f toolbox.yaml
 ```
 
-- Check the status
+- Check Status
 
 ```sh
-ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k get ns
-NAME              STATUS   AGE
-cert-manager      Active   5m12s
-default           Active   6m3s
-ingress-nginx     Active   5m20s
-kube-node-lease   Active   6m4s
-kube-public       Active   6m4s
-kube-system       Active   6m4s
-rook-ceph         Active   20s
+NAME                                                      READY   STATUS      RESTARTS   AGE
+pod/csi-cephfsplugin-bfwps                                3/3     Running     0          7m43s
+pod/csi-cephfsplugin-bqpwj                                3/3     Running     0          7m43s
+pod/csi-cephfsplugin-cbrtd                                3/3     Running     0          7m43s
+pod/csi-cephfsplugin-provisioner-767b98d587-h5b2w         6/6     Running     0          7m42s
+pod/csi-cephfsplugin-provisioner-767b98d587-hmqgz         6/6     Running     0          7m42s
+pod/csi-rbdplugin-g9fw4                                   3/3     Running     0          7m45s
+pod/csi-rbdplugin-gsv4j                                   3/3     Running     0          7m45s
+pod/csi-rbdplugin-provisioner-77f75f4469-6zgsq            6/6     Running     0          7m44s
+pod/csi-rbdplugin-provisioner-77f75f4469-7vdsn            6/6     Running     0          7m44s
+pod/csi-rbdplugin-z9gz6                                   3/3     Running     0          7m45s
+pod/rook-ceph-crashcollector-k8s-master-58d59dbdc-gk2cd   1/1     Running     0          6m49s
+pod/rook-ceph-crashcollector-worker0-759f7dcc58-p8ch7     1/1     Running     0          6m43s
+pod/rook-ceph-crashcollector-worker1-7ff7697d4f-x7hqj     1/1     Running     0          6m48s
+pod/rook-ceph-mgr-a-65647dfbf-v88pn                       1/1     Running     0          6m49s
+pod/rook-ceph-mon-a-5fbd6986c4-c27mt                      1/1     Running     0          7m30s
+pod/rook-ceph-mon-b-545f56fb8-dtrdk                       1/1     Running     0          7m18s
+pod/rook-ceph-mon-c-56d5b88b8f-cdj2p                      1/1     Running     0          7m4s
+pod/rook-ceph-operator-5d58889f96-zv2np                   1/1     Running     0          9m33s
+pod/rook-ceph-osd-prepare-k8s-master-2sh98                0/1     Completed   0          6m7s
+pod/rook-ceph-osd-prepare-worker0-qv6p5                   0/1     Completed   0          6m7s
+pod/rook-ceph-osd-prepare-worker1-9fl2f                   0/1     Completed   0          6m6s
+pod/rook-ceph-tools-599d59ffcc-52nt9                      1/1     Running     0          5m5s
 
-ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k -n rook-ceph get all
-NAME                                      READY   STATUS    RESTARTS   AGE
-pod/rook-ceph-operator-5ddd885974-l85kg   1/1     Running   0          37s
+NAME                               TYPE        CLUSTER-IP       EXTERNAL-IP   PORT(S)             AGE
+service/csi-cephfsplugin-metrics   ClusterIP   10.100.58.141    <none>        8080/TCP,8081/TCP   7m42s
+service/csi-rbdplugin-metrics      ClusterIP   10.105.85.232    <none>        8080/TCP,8081/TCP   7m44s
+service/rook-ceph-mgr              ClusterIP   10.107.167.22    <none>        9283/TCP            6m43s
+service/rook-ceph-mgr-dashboard    ClusterIP   10.107.27.0      <none>        8443/TCP            6m43s
+service/rook-ceph-mon-a            ClusterIP   10.105.170.251   <none>        6789/TCP,3300/TCP   7m31s
+service/rook-ceph-mon-b            ClusterIP   10.96.96.219     <none>        6789/TCP,3300/TCP   7m19s
+service/rook-ceph-mon-c            ClusterIP   10.96.184.110    <none>        6789/TCP,3300/TCP   7m5s
 
-NAME                                 READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/rook-ceph-operator   1/1     1            1           37s
+NAME                              DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
+daemonset.apps/csi-cephfsplugin   3         3         3       3            3           <none>          7m43s
+daemonset.apps/csi-rbdplugin      3         3         3       3            3           <none>          7m45s
 
-NAME                                            DESIRED   CURRENT   READY   AGE
-replicaset.apps/rook-ceph-operator-5ddd885974   1         1         1       37s
+NAME                                                  READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/csi-cephfsplugin-provisioner          2/2     2            2           7m42s
+deployment.apps/csi-rbdplugin-provisioner             2/2     2            2           7m44s
+deployment.apps/rook-ceph-crashcollector-k8s-master   1/1     1            1           6m49s
+deployment.apps/rook-ceph-crashcollector-worker0      1/1     1            1           6m43s
+deployment.apps/rook-ceph-crashcollector-worker1      1/1     1            1           6m48s
+deployment.apps/rook-ceph-mgr-a                       1/1     1            1           6m49s
+deployment.apps/rook-ceph-mon-a                       1/1     1            1           7m30s
+deployment.apps/rook-ceph-mon-b                       1/1     1            1           7m18s
+deployment.apps/rook-ceph-mon-c                       1/1     1            1           7m4s
+deployment.apps/rook-ceph-operator                    1/1     1            1           9m33s
+deployment.apps/rook-ceph-tools                       1/1     1            1           5m5s
+
+NAME                                                            DESIRED   CURRENT   READY   AGE
+replicaset.apps/csi-cephfsplugin-provisioner-767b98d587         2         2         2       7m42s
+replicaset.apps/csi-rbdplugin-provisioner-77f75f4469            2         2         2       7m44s
+replicaset.apps/rook-ceph-crashcollector-k8s-master-58d59dbdc   1         1         1       6m49s
+replicaset.apps/rook-ceph-crashcollector-worker0-759f7dcc58     1         1         1       6m43s
+replicaset.apps/rook-ceph-crashcollector-worker1-7ff7697d4f     1         1         1       6m48s
+replicaset.apps/rook-ceph-mgr-a-65647dfbf                       1         1         1       6m49s
+replicaset.apps/rook-ceph-mon-a-5fbd6986c4                      1         1         1       7m30s
+replicaset.apps/rook-ceph-mon-b-545f56fb8                       1         1         1       7m18s
+replicaset.apps/rook-ceph-mon-c-56d5b88b8f                      1         1         1       7m4s
+replicaset.apps/rook-ceph-operator-5d58889f96                   1         1         1       9m33s
+replicaset.apps/rook-ceph-tools-599d59ffcc                      1         1         1       5m5s
+
+NAME                                         COMPLETIONS   DURATION   AGE
+job.batch/rook-ceph-osd-prepare-k8s-master   1/1           7s         6m7s
+job.batch/rook-ceph-osd-prepare-worker0      1/1           7s         6m7s
+job.batch/rook-ceph-osd-prepare-worker1      1/1           6s         6m6s
+```
+
+- Install Ceph Toolbox
+
+> Reference > https://rook.io/docs/rook/v1.6/ceph-toolbox.html
+
+```sh
+cd ~/rook_release-1.6/cluster/examples/kubernetes/ceph
+kubectl create -f toolbox.yaml
+```
+
+Check Ceph status
+```sh
+kubectl -n rook-ceph exec -it rook-ceph-tools-599d59ffcc-hm989 -- /bin/bash
+
+k -n rook-ceph exec -it $(k -n rook-ceph get pod -l "app=rook-ceph-tools" -o jsonpath='{.items[0].metadata.name}') -- /bin/bash
+
+ceph status
+ceph osd status
+ceph df
+rados df
+```
+
+The output of running above commands
+
+```sh
+sh-4.4# ceph status
+  cluster:
+    id:     50602fec-d650-4237-b748-06e040ad21e4
+    health: HEALTH_WARN
+            mons are allowing insecure global_id reclaim
+
+  services:
+    mon: 3 daemons, quorum a,b,c (age 10m)
+    mgr: a(active, since 8m)
+    osd: 3 osds: 3 up (since 9m), 3 in (since 9m)
+
+  data:
+    pools:   1 pools, 1 pgs
+    objects: 0 objects, 0 B
+    usage:   3.0 GiB used, 57 GiB / 60 GiB avail
+    pgs:     1 active+clean
+
+sh-4.4#
+sh-4.4# ceph osd status
+ID  HOST         USED  AVAIL  WR OPS  WR DATA  RD OPS  RD DATA  STATE      
+ 0  worker0     1026M  18.9G      0        0       0        0   exists,up  
+ 1  worker1     1026M  18.9G      0        0       0        0   exists,up  
+ 2  k8s-master  1026M  18.9G      0        0       0        0   exists,up  
+sh-4.4# ceph df
+--- RAW STORAGE ---
+CLASS  SIZE    AVAIL   USED     RAW USED  %RAW USED
+hdd    60 GiB  57 GiB  8.1 MiB   3.0 GiB       5.01
+TOTAL  60 GiB  57 GiB  8.1 MiB   3.0 GiB       5.01
+
+--- POOLS ---
+POOL                   ID  PGS  STORED  OBJECTS  USED  %USED  MAX AVAIL
+device_health_metrics   1    1     0 B        0   0 B      0     18 GiB
+sh-4.4#
+```
+
+- Teardown the Entire Rook:Ceph Cluster
+
+> Reference >
+> https://rook.github.io/docs/rook/v1.6/ceph-teardown.html
+> https://github.com/rook/rook/blob/master/Documentation/ceph-common-issues.md
+
+**Notice** > `/var/lib/rook` must be cleaned-up: Path on each host in the cluster where configuration is cached by the ceph mons and osds (object storage device)
+
+```sh
+## This may take a while
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k -n rook-ceph delete cephclusters.ceph.rook.io rook-ceph
+
+## Double check
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k -n rook-ceph get cephcluster
+No resources found in rook-ceph namespace.
+
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k delete -f operator.yaml
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k delete -f common.yaml
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k delete -f crds.yaml
+
+## Run this on EACH of OSD node
+ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ sudo rm -fr /var/lib/rook/
+
+helm -n rook-ceph delete rook-ceph
+kubectl delete namespace rook-ceph
 ```
 
 ---
-#### Beyond this point, VANTIQ deployment can start from now
+
+<center><font size=5>Beyond this point, VANTIQ deployment can start from now</font></center>
+
 ---
 
 
@@ -1872,4 +2051,132 @@ aiops:
 - name: init k8s
   include_tasks: init_k8s.yaml
   when: inventory_hostname in groups["master"]
+```
+
+#### Rook Storage Cluster with Ceph through YAML
+
+> Reference > https://github.com/rook/rook/blob/master/Documentation/ceph-quickstart.md
+
+- Pre-requisite
+
+Since I have only 3 nodes in Kubernetes cluster, including `master`, I have to utilize `master` as a `worker` for this testcase.
+
+```sh
+kubectl describe nodes k8s-master | grep "Taints:"
+Taints:             node-role.kubernetes.io/master:NoSchedule
+```
+
+```sh
+kubectl taint nodes --all node-role.kubernetes.io/master-
+```
+
+or
+
+```sh
+kubectl taint nodes --all node-role.kubernetes.io/master:NoSchedule-
+```
+
+```sh
+kubectl describe nodes k8s-master | grep "Taints:"
+Taints:             <none>
+```
+
+- Download and Install
+
+Use the most latest one when writing this document
+
+```sh
+git clone --single-branch --branch release-1.6 https://github.com/rook/rook.git
+
+ubuntu@master0:~/rook$ cd cluster/examples/kubernetes/ceph/
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k create -f crds.yaml -f common.yaml -f operator.yaml
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k create -f cluster.yaml
+```
+
+- Check the status
+
+```sh
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k get ns
+NAME              STATUS   AGE
+cert-manager      Active   5m12s
+default           Active   6m3s
+ingress-nginx     Active   5m20s
+kube-node-lease   Active   6m4s
+kube-public       Active   6m4s
+kube-system       Active   6m4s
+rook-ceph         Active   20s
+
+ubuntu@master0:~/rook/cluster/examples/kubernetes/ceph$ k -n rook-ceph get all
+NAME                                      READY   STATUS    RESTARTS   AGE
+pod/rook-ceph-operator-5ddd885974-l85kg   1/1     Running   0          37s
+
+NAME                                 READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/rook-ceph-operator   1/1     1            1           37s
+
+NAME                                            DESIRED   CURRENT   READY   AGE
+replicaset.apps/rook-ceph-operator-5ddd885974   1         1         1       37s
+```
+
+
+## Troubleshooting
+
+#### Terminating namespace gets stuck
+
+After `kubectl delete namespace rook-ceph`, the `STATUS` stays at `Terminating` forever
+
+```sh
+ubuntu@master0:~$ k get ns
+NAME              STATUS        AGE
+cert-manager      Active        24h
+default           Active        24h
+ingress-nginx     Active        24h
+kube-node-lease   Active        24h
+kube-public       Active        24h
+kube-system       Active        24h
+rook-ceph         Terminating   24h
+```
+
+- Extract namespace's configuration
+
+```sh
+ubuntu@master0:~$ k get ns rook-ceph -o json > rook-ceph.json
+```
+
+- Edit the extracted configuration and remove `finalizers` array, from
+
+```json
+    "spec": {
+        "finalizers": [
+          "kubernetes"
+        ]
+    },
+```
+
+to
+
+```json
+    "spec": {
+        "finalizers": [
+        ]
+    },
+```
+
+- Execute the cleanup command
+
+```sh
+ubuntu@master0:~$ k replace --raw "/api/v1/namespaces/rook-ceph/finalize" -f ./rook-ceph.json
+```
+
+#### Clean up Resources
+
+- Delete several dozens `crd` (Customized Resource Definition)
+
+```sh
+for i in `kubectl -n rook-ceph get crd | grep -v NAME | awk '{print $1}'`; do kubectl -n rook-ceph delete crd $i; done
+```
+
+- Delete multiple `secrets`
+
+```sh
+for i in `k -n rook-ceph get secrets | grep -v NAME | awk '{print $1}'`; do k -n rook-ceph delete secrets $i; done
 ```
