@@ -1575,18 +1575,9 @@ sudo apt-get --purge remove nginx-*
 
 #### Rook Storage Cluster with Ceph
 
-- Install by Helm3
-
-> Reference > https://rook.io/docs/rook/v1.6/helm-operator.html
-
-```sh
-helm repo add rook-release https://charts.rook.io/release
-kubectl create namespace rook-ceph
-helm install --namespace rook-ceph rook-ceph rook-release/rook-ceph
-```
-
-
 - Pre-requisite
+
+> Reference > https://rook.io/docs/rook/v1.6/ceph-prerequisites.html
 
 Since I have only 3 nodes in Kubernetes cluster, including `master`, I have to utilize `master` as a `worker` for this testcase.
 
@@ -1610,6 +1601,14 @@ kubectl describe nodes k8s-master | grep "Taints:"
 Taints:             <none>
 ```
 
+- Disk Allocation
+
+vm | device_id | size
+-- | -- | ---
+k8s_master | `/dev/sdc` | 20G
+worker0 | `/dev/sda` | 20G
+worker1 | `/dev/sdb` | 20G
+
 - Download and Install
 
 Use the most latest one when writing this document
@@ -1618,11 +1617,28 @@ Use the most latest one when writing this document
 git clone --single-branch --branch release-1.6 https://github.com/rook/rook.git
 ```
 
-> Reference > https://github.com/rook/rook/blob/master/Documentation/ceph-quickstart.md
+- Install by Helm3
+
+> Reference > https://rook.io/docs/rook/v1.6/helm-operator.html
 
 ```sh
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k apply -f cluster.yaml
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k apply -f toolbox.yaml
+helm repo add rook-release https://charts.rook.io/release
+kubectl create namespace rook-ceph
+helm install --namespace rook-ceph rook-ceph rook-release/rook-ceph
+```
+
+> Reference > https://github.com/rook/rook/blob/master/Documentation/ceph-quickstart.md
+
+Or by YAML
+
+```sh
+cd ~/rook_release-1.6/cluster/examples/kubernetes/ceph
+kubectl create -f crds.yaml -f common.yaml -f operator.yaml
+```
+
+```sh
+cd ~/rook_release-1.6/cluster/examples/kubernetes/ceph
+kubectl apply -f cluster.yaml
 ```
 
 - Check Status
@@ -1697,6 +1713,8 @@ job.batch/rook-ceph-osd-prepare-worker0      1/1           7s         6m7s
 job.batch/rook-ceph-osd-prepare-worker1      1/1           6s         6m6s
 ```
 
+> Wait for a while until you can see `rook-ceph-osd-prepare*` pods up
+
 - Install Ceph Toolbox
 
 > Reference > https://rook.io/docs/rook/v1.6/ceph-toolbox.html
@@ -1710,7 +1728,8 @@ Check Ceph status
 ```sh
 kubectl -n rook-ceph exec -it rook-ceph-tools-599d59ffcc-hm989 -- /bin/bash
 
-k -n rook-ceph exec -it $(k -n rook-ceph get pod -l "app=rook-ceph-tools" -o jsonpath='{.items[0].metadata.name}') -- /bin/bash
+kubectl -n rook-ceph exec -it $(k -n rook-ceph get pod -l "app=rook-ceph-tools" \
+  -o jsonpath='{.items[0].metadata.name}') -- /bin/bash
 
 ceph status
 ceph osd status
@@ -1721,16 +1740,19 @@ rados df
 The output of running above commands
 
 ```sh
-sh-4.4# ceph status
+kubectl -n rook-ceph exec -it $(k -n rook-ceph get pod -l "app=rook-ceph-tools" \
+  -o jsonpath='{.items[0].metadata.name}') -- /bin/bash
+
+[root@rook-ceph-tools-599d59ffcc-xvhbr /]# ceph status
   cluster:
-    id:     50602fec-d650-4237-b748-06e040ad21e4
+    id:     da1dd047-fc04-44ac-9aa9-0f7af8598378
     health: HEALTH_WARN
             mons are allowing insecure global_id reclaim
 
   services:
-    mon: 3 daemons, quorum a,b,c (age 10m)
-    mgr: a(active, since 8m)
-    osd: 3 osds: 3 up (since 9m), 3 in (since 9m)
+    mon: 3 daemons, quorum a,b,c (age 79s)
+    mgr: a(active, since 9s)
+    osd: 3 osds: 3 up (since 43s), 3 in (since 43s)
 
   data:
     pools:   1 pools, 1 pgs
@@ -1738,51 +1760,87 @@ sh-4.4# ceph status
     usage:   3.0 GiB used, 57 GiB / 60 GiB avail
     pgs:     1 active+clean
 
-sh-4.4#
-sh-4.4# ceph osd status
-ID  HOST         USED  AVAIL  WR OPS  WR DATA  RD OPS  RD DATA  STATE      
- 0  worker0     1026M  18.9G      0        0       0        0   exists,up  
- 1  worker1     1026M  18.9G      0        0       0        0   exists,up  
- 2  k8s-master  1026M  18.9G      0        0       0        0   exists,up  
-sh-4.4# ceph df
+[root@rook-ceph-tools-599d59ffcc-xvhbr /]# ceph osd status
+ID  HOST         USED  AVAIL  WR OPS  WR DATA  RD OPS  RD DATA  STATE
+ 0  k8s-master  1026M  18.9G      0        0       0        0   exists,up
+ 1  worker1     1026M  18.9G      0        0       0        0   exists,up
+ 2  worker0     1026M  18.9G      0        0       0        0   exists,up
+
+[root@rook-ceph-tools-599d59ffcc-xvhbr /]# ceph df
 --- RAW STORAGE ---
 CLASS  SIZE    AVAIL   USED     RAW USED  %RAW USED
-hdd    60 GiB  57 GiB  8.1 MiB   3.0 GiB       5.01
-TOTAL  60 GiB  57 GiB  8.1 MiB   3.0 GiB       5.01
+hdd    60 GiB  57 GiB  6.2 MiB   3.0 GiB       5.01
+TOTAL  60 GiB  57 GiB  6.2 MiB   3.0 GiB       5.01
 
 --- POOLS ---
 POOL                   ID  PGS  STORED  OBJECTS  USED  %USED  MAX AVAIL
 device_health_metrics   1    1     0 B        0   0 B      0     18 GiB
-sh-4.4#
 ```
 
-- Teardown the Entire Rook:Ceph Cluster
+- Teardown the Entire Rook-Ceph Cluster
 
 > Reference >
 > https://rook.github.io/docs/rook/v1.6/ceph-teardown.html
 > https://github.com/rook/rook/blob/master/Documentation/ceph-common-issues.md
 
-**Notice** > `/var/lib/rook` must be cleaned-up: Path on each host in the cluster where configuration is cached by the ceph mons and osds (object storage device)
+> **Notice**: `/var/lib/rook` must be cleaned-up: Path on each host in the cluster where configuration is cached by the ceph mons and osds (object storage device)
 
 ```sh
 ## This may take a while
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k -n rook-ceph delete cephclusters.ceph.rook.io rook-ceph
+kubectl -n rook-ceph delete cephclusters.ceph.rook.io rook-ceph
 
 ## Double check
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k -n rook-ceph get cephcluster
+kubectl -n rook-ceph get cephcluster
 No resources found in rook-ceph namespace.
 
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k delete -f operator.yaml
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k delete -f common.yaml
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ k delete -f crds.yaml
+cd ~/rook_release-1.6/cluster/examples/kubernetes/ceph
+kubectl delete -f operator.yaml
+kubectl delete -f common.yaml
+kubectl delete -f crds.yaml
 
 ## Run this on EACH of OSD node
-ubuntu@master0:~/rook_release-1.6/cluster/examples/kubernetes/ceph$ sudo rm -fr /var/lib/rook/
+sudo rm -fr /var/lib/rook/
 
 helm -n rook-ceph delete rook-ceph
 kubectl delete namespace rook-ceph
 ```
 
+- Troubleshooting
+
+Error message shown in `operator` pod log
+
+```sh
+kubectl -n rook-ceph logs -f rook-ceph-operator-c4459dbf7-426rk
+
+2021-06-15 14:02:08.901199 I | cephosd: skipping osd.2: "35469c76-ee78-48f8-9141-1b6e6d95f66f" belonging to a different ceph cluster "50602fec-d650-4237-b748-06e040ad21e4"
+2021-06-15 14:02:08.901205 I | cephosd: 0 ceph-volume raw osd devices configured on this node
+```
+
+Solution is to `dd` the target disk(s) to completely wipe-out previously configured cluster info, on EACH Ceph node
+
+> **Warning**: this command will completely erase data on disk!
+
+```sh
+sudo dd if=/dev/zero of=/dev/sdX bs=1M status=progress
+```
+
+> Common issues > https://github.com/rook/rook/blob/master/Documentation/ceph-csi-troubleshooting.md
+
+To remove OSD, DaveAck provides this link >
+https://documentation.suse.com/ses/7/html/ses-all/storage-salt-cluster.html#osd-management-erasing
+
+- Block Storage
+
+> Reference > https://github.com/rook/rook/blob/master/Documentation/ceph-block.md
+
+```sh
+cd ~/rook_release-1.6/cluster/examples/kubernetes/ceph/csi/rbd$
+kubectl create -f storageclass.yaml
+
+kubectl -n rook-ceph get storageclasses.storage.k8s.io
+NAME              PROVISIONER                  RECLAIMPOLICY   VOLUMEBINDINGMODE   ALLOWVOLUMEEXPANSION   AGE
+rook-ceph-block   rook-ceph.rbd.csi.ceph.com   Delete          Immediate           true                   2d
+```
 ---
 
 <center><font size=5>Beyond this point, VANTIQ deployment can start from now</font></center>
