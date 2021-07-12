@@ -34,7 +34,7 @@
     - [Install `flannel` Network Plugin (master only) - `role: k8s_flannel`](#install-flannel-network-plugin-master-only-role-k8s_flannel)
     - [Create `kubeadm join` Command - `role: k8s_join_cmd`](#create-kubeadm-join-command-role-k8s_join_cmd)
     - [Join `node` in Kubernetes cluster - `role: k8s_join_node`](#join-node-in-kubernetes-cluster-role-k8s_join_node)
-    - [Destroy Entire Kubernetes Cluster](#destroy-entire-kubernetes-cluster)
+    - [Destroy Entire Kubernetes Cluster and Docker](#destroy-entire-kubernetes-cluster-and-docker)
     - [(Optional) AutoComplete and Alias for `kubectl` and `kubeadm` - `role: k8s_autocompletion`](#optional-autocomplete-and-alias-for-kubectl-and-kubeadm-role-k8s_autocompletion)
     - [Custom persistentVolume](#custom-persistentvolume)
     - [Kubernetes within China](#kubernetes-within-china)
@@ -965,9 +965,34 @@ ubuntu@master0:~/ansible$ cat roles/k8s_join_node/tasks/main.yml
   command: sh /tmp/join-command.sh
 ```
 
-#### Destroy Entire Kubernetes Cluster
+#### Destroy Entire Kubernetes Cluster and Docker
 
-Run the following on __each__ of nodes
+> Warning: this will destroy the entire cluster of Kubernetes and Docker!!!
+
+Ansible code
+
+```sh
+ubuntu@master0:~/ansible$ cat roles/k8s_destroy/tasks/main.yml
+---
+# tasks file for k8s_destroy
+- name: destroy kubernetes cluster and docker
+  shell: |
+    yes 'Y' | kubeadm reset
+    apt purge kubectl kubeadm kubelet kubernetes-cni -y
+    rm -fr /etc/kubernetes/; rm -fr /var/lib/etcd; rm -rf /var/lib/cni/; rm -fr /etc/cni/net.d
+    rm -fr /home/{{ uusername }}/.kube/
+    systemctl daemon-reload
+    iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+    docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
+    apt purge docker-ce docker-ce-cli docker-ce-rootless-extras docker-scan-plugin -y
+    ip link delete cni0
+    ip link delete flannel.1
+    ip link delete docker0
+```
+
+> Reboot the VMs after the above is done to ensure all link/ device of network get removed completely
+
+Run the following on __each__ of nodes if you want to _manually_ teardown the cluster
 
 ```sh
 sudo kubeadm reset
@@ -992,6 +1017,13 @@ docker rm -f `docker ps -a | grep "k8s_" | awk '{print $1}'`
 If you also want to remove all pulled docker image, do
 
 **Warning**: this would remove **ALL** images
+
+```sh
+docker rm  $(docker ps -a -q)   # stop all docker containers
+docker rmi $(docker images -q)  # remove all images
+```
+
+or
 
 ```sh
 for i in `docker image ls | grep -v "IMAGE ID" | awk '{print $3}'`; do docker image rm $i; done
